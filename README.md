@@ -89,11 +89,9 @@ See [SETUP.md](SETUP.md) for the complete step-by-step walkthrough.
 | `scripts/auto-heal.sh` | Hourly self-healer (restarts VPN/containers if down) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
 
-## Screenshots
+## What It Looks Like
 
-| Seerr (request movies/shows) | Radarr (movie library) | Sonarr (TV library) |
-|:---:|:---:|:---:|
-| ![Seerr](screenshots/seerr.png) | ![Radarr](screenshots/radarr.png) | ![Sonarr](screenshots/sonarr.png) |
+<img src="ui-flow.gif" alt="Request to streaming UI flow" width="700" />
 
 ## Day-to-Day Usage
 
