@@ -1,0 +1,133 @@
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    env_file:
+      - ./.env
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - SERVER_COUNTRIES=United States
+      - PORT_FORWARD_ONLY=on
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
+      - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
+      - TZ=${TIMEZONE:-America/New_York}
+    ports:
+      - 127.0.0.1:8080:8080    # qbittorrent webui
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    depends_on:
+      - gluetun
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TIMEZONE:-America/New_York}
+      - WEBUI_PORT=8080
+    volumes:
+      - ${MEDIA_DIR}/config/qbittorrent:/config
+      - ${MEDIA_DIR}/Downloads:/downloads
+      - ${MEDIA_DIR}/Movies:/movies
+      - ${MEDIA_DIR}/TV Shows:/tv
+    restart: unless-stopped
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TIMEZONE:-America/New_York}
+    volumes:
+      - ${MEDIA_DIR}/config/prowlarr:/config
+    ports:
+      - 127.0.0.1:9696:9696
+    restart: unless-stopped
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TIMEZONE:-America/New_York}
+    volumes:
+      - ${MEDIA_DIR}/config/sonarr:/config
+      - ${MEDIA_DIR}/TV Shows:/tv
+      - ${MEDIA_DIR}/Downloads:/downloads
+    ports:
+      - 127.0.0.1:8989:8989
+    restart: unless-stopped
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TIMEZONE:-America/New_York}
+    volumes:
+      - ${MEDIA_DIR}/config/radarr:/config
+      - ${MEDIA_DIR}/Movies:/movies
+      - ${MEDIA_DIR}/Downloads:/downloads
+    ports:
+      - 127.0.0.1:7878:7878
+    restart: unless-stopped
+
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:latest
+    container_name: bazarr
+    environment:
+      - PUID=${PUID:-501}
+      - PGID=${PGID:-20}
+      - TZ=${TIMEZONE:-America/New_York}
+    volumes:
+      - ${MEDIA_DIR}/config/bazarr:/config
+      - ${MEDIA_DIR}/Movies:/movies
+      - ${MEDIA_DIR}/TV Shows:/tv
+    ports:
+      - 127.0.0.1:6767:6767
+    restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=info
+      - LOG_HTML=false
+      - TZ=${TIMEZONE:-America/New_York}
+    ports:
+      - 127.0.0.1:8191:8191
+    restart: unless-stopped
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    environment:
+      - TZ=${TIMEZONE:-America/New_York}
+    volumes:
+      - ${MEDIA_DIR}/config/seerr:/app/config
+    ports:
+      - 0.0.0.0:5055:5055
+    restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    environment:
+      - TZ=${TIMEZONE:-America/New_York}
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_SCHEDULE=0 0 4 * * *
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
