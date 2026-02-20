@@ -20,9 +20,14 @@
   <br><br>
 </div>
 
-## Why macOS?
+## Why This One?
 
-Nearly every media server guide assumes you're running Linux. But plenty of people have a Mac mini or old MacBook sitting around that would make a great always-on server. This project is built specifically for that: native macOS paths, launchd instead of systemd, Docker Desktop instead of bare Docker, and setup scripts that just work on a Mac out of the box.
+There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of them dump a compose file and leave you to figure out the rest. This one is different:
+
+- **One command to install.** Clone, configure, and start everything with a single `curl | bash`. No 45-minute manual setup.
+- **Auto-configures itself.** The configure script wires up Radarr, Sonarr, Prowlarr, Seerr, and qBittorrent via their APIs. No clicking through 6 different web UIs.
+- **Built for macOS.** Native paths, launchd instead of systemd, Docker Desktop instead of bare Docker. Not a Linux guide with "should work on Mac" in the footnotes.
+- **Self-healing.** Hourly health checks restart anything that goes down. VPN drops, container crashes, stalled downloads — handled automatically.
 
 ---
 
