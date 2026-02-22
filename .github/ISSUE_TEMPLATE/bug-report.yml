@@ -1,0 +1,39 @@
+name: Bug Report
+description: Something isn't working
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      placeholder: e.g. Sonoma 14.2
+    validations:
+      required: true
+  - type: input
+    id: chip
+    attributes:
+      label: Mac chip
+      placeholder: e.g. M1, M2 Pro, M4
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste any error output or logs
+      render: shell
+    validations:
+      required: false
