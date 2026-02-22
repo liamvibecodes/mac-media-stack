@@ -207,13 +207,13 @@ echo -e "${CYAN}Running setup...${NC}"
 bash scripts/setup.sh --media-dir "$MEDIA_DIR"
 
 # Write media server choice to .env
+if grep -q '^MEDIA_SERVER=' .env 2>/dev/null; then
+    sed -i '' "s/^MEDIA_SERVER=.*/MEDIA_SERVER=$MEDIA_SERVER/" .env
+else
+    echo "" >> .env
+    echo "MEDIA_SERVER=$MEDIA_SERVER" >> .env
+fi
 if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    if grep -q '^MEDIA_SERVER=' .env 2>/dev/null; then
-        sed -i '' 's/^MEDIA_SERVER=.*/MEDIA_SERVER=jellyfin/' .env
-    else
-        echo "" >> .env
-        echo "MEDIA_SERVER=jellyfin" >> .env
-    fi
     mkdir -p "$MEDIA_DIR/config/jellyfin"
 fi
 

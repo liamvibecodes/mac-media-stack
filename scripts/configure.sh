@@ -487,7 +487,7 @@ if [[ "$NON_INTERACTIVE" == true ]]; then
     if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
         warn "Non-interactive mode: skipping Seerr Jellyfin sign-in prompt."
         warn "Manually open http://localhost:5055, select \"Use your Jellyfin account\","
-        warn "and enter http://host.docker.internal:8096 as the Jellyfin URL."
+        warn "and enter http://jellyfin:8096 as the Jellyfin URL."
     else
         warn "Non-interactive mode: skipping Seerr Plex sign-in prompt."
         warn "Manually open http://localhost:5055 and sign in with Plex, then configure services in Seerr."
@@ -495,7 +495,7 @@ if [[ "$NON_INTERACTIVE" == true ]]; then
 elif [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
     echo -e "  ${YELLOW}ACTION NEEDED:${NC} Open ${CYAN}http://localhost:5055${NC} in your browser"
     echo "  1. Click \"Use your Jellyfin account\""
-    echo "  2. Enter Jellyfin URL: ${CYAN}http://host.docker.internal:8096${NC}"
+    echo "  2. Enter Jellyfin URL: ${CYAN}http://jellyfin:8096${NC}"
     echo "  3. Enter your Jellyfin username and password"
     echo ""
     read -p "  Press Enter after you've signed in to Seerr..."
