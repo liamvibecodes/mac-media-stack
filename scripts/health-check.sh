@@ -46,7 +46,7 @@ echo ""
 
 # Check containers are running
 echo "Containers:"
-for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr watchtower; do
+for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr; do
     state=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)
     if [[ "$state" == "running" ]]; then
         echo -e "  ${GREEN}OK${NC}  $name"
@@ -56,6 +56,14 @@ for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr
         ((FAIL++))
     fi
 done
+
+watchtower_state=$(docker inspect -f '{{.State.Status}}' watchtower 2>/dev/null || true)
+if [[ "$watchtower_state" == "running" ]]; then
+    echo -e "  ${GREEN}OK${NC}  watchtower (autoupdate profile enabled)"
+    ((PASS++))
+else
+    echo -e "  ${YELLOW}SKIP${NC}  watchtower (optional; enable with --profile autoupdate)"
+fi
 
 echo ""
 echo "Web UIs:"
