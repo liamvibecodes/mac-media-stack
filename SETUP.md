@@ -41,7 +41,7 @@ You need a container runtime to run the behind-the-scenes services. Pick one:
 OrbStack is faster and lighter than Docker Desktop (~2s startup, ~1GB RAM).
 
 ```bash
-brew install orbstack
+brew install --cask orbstack
 ```
 
 Or download from https://orbstack.dev. Open it once after installing.

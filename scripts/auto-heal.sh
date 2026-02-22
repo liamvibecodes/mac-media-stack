@@ -19,7 +19,7 @@ log "--- Health check started ---"
 
 # Check Docker is running
 if ! docker info &>/dev/null; then
-    log "ERROR: Docker not running. Cannot heal."
+    log "ERROR: Container runtime not running. Cannot heal."
     exit 1
 fi
 
