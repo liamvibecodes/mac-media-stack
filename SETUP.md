@@ -21,6 +21,12 @@ curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/
 
 It will prompt you for VPN keys and walk you through the Seerr login. If you'd rather do each step yourself, continue with the manual guide below.
 
+You can also run it locally with custom paths:
+
+```bash
+bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack
+```
+
 ---
 
 ## What You Need
@@ -133,13 +139,19 @@ WIREGUARD_ADDRESSES=10.2.0.2/32
 
 ## Step 6: Start the Stack
 
+Run preflight checks before first startup:
+
+```bash
+bash scripts/doctor.sh
+```
+
+Then start services:
+
 ```bash
 docker compose up -d
 ```
 
-This will download everything it needs (about 2-3 GB, may take a few minutes on the first run). You'll see each service being created.
-
-When it's done, wait about 30 seconds for everything to start up, then run the health check:
+This will download everything it needs (about 2-3 GB, may take a few minutes on the first run). You'll see each service being created. After it starts, run the health check:
 
 ```bash
 bash scripts/health-check.sh
@@ -179,7 +191,7 @@ The script will:
 - Connect everything together (Prowlarr, Radarr, Sonarr, Seerr)
 - Ask you to sign in to Seerr with Plex (one browser click)
 
-At the end it will print your qBittorrent password. Save it somewhere just in case, but you shouldn't need it for normal use.
+At the end it will print your qBittorrent password and save credentials/API keys to `~/Media/state/first-run-credentials.txt` (mode `600`).
 
 ---
 ## Step 9: Install Auto-Healer (Optional but Recommended)

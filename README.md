@@ -64,6 +64,12 @@ Requires OrbStack (or Docker Desktop) and Plex already installed. Handles everyt
 curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash
 ```
 
+Optional flags when running from a local clone:
+
+```bash
+bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack --non-interactive
+```
+
 <details>
 <summary>See it in action</summary>
 <br>
@@ -79,6 +85,7 @@ git clone https://github.com/liamvibecodes/mac-media-stack.git
 cd mac-media-stack
 bash scripts/setup.sh        # creates folders, generates .env
 # edit .env and add your VPN keys
+bash scripts/doctor.sh       # preflight validation before first boot
 docker compose up -d          # start everything
 docker compose --profile autoupdate up -d watchtower  # optional auto-updates
 bash scripts/configure.sh     # auto-configure all services
@@ -96,6 +103,7 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | Script | Purpose |
 |--------|---------|
 | `scripts/setup.sh` | Creates folder structure and .env file |
+| `scripts/doctor.sh` | Runs preflight checks (runtime, env, compose, ports) |
 | `scripts/configure.sh` | Auto-configures all service connections |
 | `scripts/health-check.sh` | Checks if everything is running correctly |
 | `scripts/auto-heal.sh` | Hourly self-healer (restarts VPN/containers if down) |

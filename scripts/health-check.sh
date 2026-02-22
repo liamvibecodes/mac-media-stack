@@ -113,16 +113,20 @@ check_service "Seerr" "http://localhost:5055"
 
 echo ""
 echo "VPN:"
-vpn_ip=$(docker exec gluetun sh -c 'wget -qO- https://ipinfo.io/ip' 2>/dev/null)
-local_ip=$(curl -s https://ipinfo.io/ip 2>/dev/null)
-if [[ -n "$vpn_ip" && "$vpn_ip" != "$local_ip" ]]; then
-    echo -e "  ${GREEN}OK${NC}  VPN active (IP: $vpn_ip)"
+vpn_ip=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/ip 2>/dev/null || true' 2>/dev/null)
+vpn_iface=$(docker exec gluetun sh -lc 'ls /sys/class/net 2>/dev/null | grep -E "^(tun|wg)[0-9]+$" | head -1' 2>/dev/null)
+vpn_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' gluetun 2>/dev/null || true)
+if [[ -n "$vpn_ip" && -n "$vpn_iface" && "$vpn_health" != "unhealthy" ]]; then
+    echo -e "  ${GREEN}OK${NC}  VPN active (IP: $vpn_ip, iface: $vpn_iface, health: ${vpn_health:-unknown})"
     ((PASS++))
 elif [[ -z "$vpn_ip" ]]; then
-    echo -e "  ${RED}FAIL${NC}  VPN not connected (no response from gluetun)"
+    echo -e "  ${RED}FAIL${NC}  VPN not connected (missing /tmp/gluetun/ip)"
+    ((FAIL++))
+elif [[ -z "$vpn_iface" ]]; then
+    echo -e "  ${RED}FAIL${NC}  VPN tunnel interface not detected in gluetun"
     ((FAIL++))
 else
-    echo -e "  ${RED}FAIL${NC}  VPN IP matches your real IP (tunnel not working)"
+    echo -e "  ${RED}FAIL${NC}  VPN health is unhealthy"
     ((FAIL++))
 fi
 

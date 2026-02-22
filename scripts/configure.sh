@@ -2,6 +2,7 @@
 # Media Stack Auto-Configurator
 # Run this ONCE after "docker compose up -d" to configure all services.
 # Replaces manual Steps 8-10 from SETUP.md.
+# Usage: bash scripts/configure.sh [--non-interactive] [--help]
 
 set -euo pipefail
 
@@ -12,6 +13,35 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+NON_INTERACTIVE=false
+
+usage() {
+    cat <<EOF
+Usage: bash scripts/configure.sh [OPTIONS]
+
+Options:
+  --non-interactive   Skip interactive Seerr Plex login wiring
+  --help              Show this help message
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --non-interactive)
+            NON_INTERACTIVE=true
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
 
 # Load .env
 if [[ ! -f "$SCRIPT_DIR/.env" ]]; then
@@ -22,6 +52,7 @@ source "$SCRIPT_DIR/.env"
 
 # Permanent qBittorrent password (generated randomly)
 QB_PASSWORD="media$(date +%s | shasum | head -c 8)"
+CREDS_FILE="$MEDIA_DIR/state/first-run-credentials.txt"
 
 # ============================================================
 # Helper functions
@@ -30,6 +61,20 @@ QB_PASSWORD="media$(date +%s | shasum | head -c 8)"
 log() { echo -e "  ${GREEN}OK${NC}  $1"; }
 warn() { echo -e "  ${YELLOW}..${NC}  $1"; }
 fail() { echo -e "  ${RED}FAIL${NC}  $1"; }
+
+save_credentials() {
+    mkdir -p "$(dirname "$CREDS_FILE")"
+    cat > "$CREDS_FILE" <<EOF
+# Media Stack first-run credentials
+# Generated: $(date '+%Y-%m-%d %H:%M:%S')
+qBittorrent Username: admin
+qBittorrent Password: $QB_PASSWORD
+Radarr API Key: $RADARR_KEY
+Sonarr API Key: $SONARR_KEY
+Prowlarr API Key: $PROWLARR_KEY
+EOF
+    chmod 600 "$CREDS_FILE"
+}
 
 api_post_json() {
     local label="$1"
@@ -218,6 +263,8 @@ else
         --data-urlencode "category=tv-sonarr" \
         --data-urlencode "savePath=/downloads/complete/tv-sonarr"
 fi
+
+save_credentials
 
 echo ""
 
@@ -434,14 +481,19 @@ echo ""
 
 echo -e "${CYAN}[6/6] Configuring Seerr...${NC}"
 echo ""
-echo -e "  ${YELLOW}ACTION NEEDED:${NC} Open ${CYAN}http://localhost:5055${NC} in your browser"
-echo "  and click \"Sign In With Plex\". Log in with your Plex account."
-echo ""
-read -p "  Press Enter after you've signed in to Seerr..."
-echo ""
+if [[ "$NON_INTERACTIVE" == true ]]; then
+    warn "Non-interactive mode: skipping Seerr Plex sign-in prompt."
+    warn "Manually open http://localhost:5055 and sign in with Plex, then configure services in Seerr."
+else
+    echo -e "  ${YELLOW}ACTION NEEDED:${NC} Open ${CYAN}http://localhost:5055${NC} in your browser"
+    echo "  and click \"Sign In With Plex\". Log in with your Plex account."
+    echo ""
+    read -p "  Press Enter after you've signed in to Seerr..."
+    echo ""
 
-# Wait a moment for Seerr to process the login
-sleep 3
+    # Wait a moment for Seerr to process the login
+    sleep 3
+fi
 
 # Get Seerr API key from settings
 SEERR_KEY=$(curl -fsS "http://localhost:5055/api/v1/settings/main" 2>/dev/null | grep -o '"apiKey":"[^"]*"' | cut -d'"' -f4)
@@ -526,6 +578,7 @@ echo "  Prowlarr (indexer admin):  http://localhost:9696"
 echo "  Bazarr (subtitles):        http://localhost:6767"
 echo ""
 echo -e "  ${YELLOW}Save your qBittorrent password:${NC} $QB_PASSWORD"
+echo "  Saved credentials:         $CREDS_FILE"
 echo ""
 echo "To request a movie or show, open Seerr and search for it."
 echo "Everything else is automatic."

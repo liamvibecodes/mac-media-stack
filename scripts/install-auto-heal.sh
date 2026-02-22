@@ -1,5 +1,6 @@
 #!/bin/bash
 # Installs the auto-heal launchd job (runs hourly).
+# Usage: bash scripts/install-auto-heal.sh [--help]
 
 set -euo pipefail
 
@@ -11,6 +12,30 @@ LAUNCH_DIR="$HOME/Library/LaunchAgents"
 LOG_DIR="$HOME/Media/logs/launchd"
 PLIST_NAME="com.media-stack.auto-heal"
 PLIST_PATH="$LAUNCH_DIR/$PLIST_NAME.plist"
+
+usage() {
+    cat <<EOF
+Usage: bash scripts/install-auto-heal.sh
+
+Installs the hourly auto-heal launchd job.
+
+Options:
+  --help    Show this help message
+EOF
+}
+
+case "${1:-}" in
+    "" ) ;;
+    --help|-h)
+        usage
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1"
+        usage
+        exit 1
+        ;;
+esac
 
 mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
 
