@@ -17,31 +17,56 @@ echo "=============================="
 echo ""
 
 # Detect container runtime
-detect_runtime() {
+detect_installed_runtime() {
+    local has_orbstack=0
+    local has_docker_desktop=0
+
     if [[ -d "/Applications/OrbStack.app" ]] || command -v orbstack &>/dev/null; then
+        has_orbstack=1
+    fi
+    if [[ -d "/Applications/Docker.app" ]]; then
+        has_docker_desktop=1
+    fi
+
+    if [[ $has_orbstack -eq 1 && $has_docker_desktop -eq 1 ]]; then
+        echo "OrbStack or Docker Desktop"
+    elif [[ $has_orbstack -eq 1 ]]; then
         echo "OrbStack"
-    elif [[ -d "/Applications/Docker.app" ]]; then
+    elif [[ $has_docker_desktop -eq 1 ]]; then
         echo "Docker Desktop"
     else
         echo "none"
     fi
 }
 
-RUNTIME=$(detect_runtime)
+detect_running_runtime() {
+    local os_name
+    os_name=$(docker info --format '{{.OperatingSystem}}' 2>/dev/null || true)
+    if [[ "$os_name" == *"OrbStack"* ]]; then
+        echo "OrbStack"
+    elif [[ "$os_name" == *"Docker Desktop"* ]]; then
+        echo "Docker Desktop"
+    else
+        echo "Docker"
+    fi
+}
+
+INSTALLED_RUNTIME=$(detect_installed_runtime)
 
 if ! docker info &>/dev/null; then
-    if [[ "$RUNTIME" == "none" ]]; then
+    if [[ "$INSTALLED_RUNTIME" == "none" ]]; then
         echo -e "${RED}No container runtime found.${NC}"
         echo ""
         echo "Install one of these:"
-        echo "  OrbStack (recommended):  brew install orbstack"
+        echo "  OrbStack (recommended):  brew install --cask orbstack"
         echo "  Docker Desktop:          https://www.docker.com/products/docker-desktop/"
     else
-        echo -e "${RED}$RUNTIME is not running.${NC}"
-        echo "Open $RUNTIME, wait for it to start, then run this again."
+        echo -e "${RED}No container runtime is running.${NC}"
+        echo "Start $INSTALLED_RUNTIME, wait for it to start, then run this again."
     fi
     exit 1
 fi
+RUNTIME=$(detect_running_runtime)
 echo -e "${GREEN}OK${NC}  $RUNTIME is running"
 
 # Check Plex

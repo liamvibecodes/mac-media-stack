@@ -11,7 +11,7 @@ A personal media server that automatically finds, downloads, and organizes movie
 
 ---
 ## Quick Option: One-Command Install
-If you already have Docker Desktop and Plex installed, you can run a single command that handles everything:
+If you already have OrbStack (or Docker Desktop) and Plex installed, you can run a single command that handles everything:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash
 ```
@@ -19,12 +19,27 @@ It will prompt you for VPN keys and walk you through the Seerr login. If you'd r
 ---
 ## What You Need
 - A Mac (any recent macOS)
+- [OrbStack](https://orbstack.dev) (recommended) or [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
 - An internet connection
 - Your VPN keys (two values: a private key and an address)
 - A free Plex account (create one at https://plex.tv if you don't have one)
 ---
-## Step 1: Install Docker Desktop
-Docker runs all the behind-the-scenes services. You install it once and forget about it.
+## Step 1: Install A Container Runtime
+You can use OrbStack (recommended) or Docker Desktop. Both run the same `docker` commands.
+
+### Option A: OrbStack (Recommended)
+1. Install OrbStack:
+```bash
+brew install --cask orbstack
+```
+2. Open OrbStack from Applications
+3. Wait for it to fully start, then run:
+```bash
+docker info
+```
+If it prints Docker system information, you're ready.
+
+### Option B: Docker Desktop
 1. Go to https://www.docker.com/products/docker-desktop/
 2. Click "Download for Mac"
    - If you have an M-series Mac (M1, M2, M3, M4): choose "Apple Silicon"
@@ -163,7 +178,7 @@ You probably won't need these, but just in case:
 ---
 ## Troubleshooting
 **Nothing is working after reboot:**
-Open Docker Desktop. Wait 30 seconds. Run `bash scripts/health-check.sh`.
+Open OrbStack or Docker Desktop. Wait 30 seconds. Run `bash scripts/health-check.sh`.
 **VPN health check fails:**
 Double-check your WireGuard keys in `.env`. Make sure there are no extra spaces. Then restart:
 ```bash
