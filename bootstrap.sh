@@ -2,7 +2,7 @@
 # Mac Media Stack - One-Shot Installer
 # Usage: curl -fsSL https://raw.githubusercontent.com/liamvibecodes/mac-media-stack/main/bootstrap.sh | bash
 
-set -e
+set -euo pipefail
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -47,7 +47,12 @@ echo ""
 INSTALL_DIR="$HOME/mac-media-stack"
 if [[ -d "$INSTALL_DIR" ]]; then
     echo -e "${YELLOW}Note:${NC} $INSTALL_DIR already exists. Pulling latest..."
-    cd "$INSTALL_DIR" && git pull --ff-only 2>/dev/null || true
+    if ! git -C "$INSTALL_DIR" pull --ff-only; then
+        echo -e "${RED}Failed to update existing repo at $INSTALL_DIR.${NC}"
+        echo "Resolve local git issues, then re-run bootstrap."
+        echo "Suggested check: cd $INSTALL_DIR && git status"
+        exit 1
+    fi
 else
     echo -e "${CYAN}Cloning repo...${NC}"
     git clone https://github.com/liamvibecodes/mac-media-stack.git "$INSTALL_DIR"
@@ -69,7 +74,8 @@ if grep -q "your_wireguard_private_key_here" .env 2>/dev/null; then
     echo "You need your ProtonVPN WireGuard credentials."
     echo "If someone gave you a private key and address, enter them now."
     echo ""
-    read -p "  WireGuard Private Key: " vpn_key
+    read -s -p "  WireGuard Private Key: " vpn_key
+    echo ""
     read -p "  WireGuard Address (e.g. 10.2.0.2/32): " vpn_addr
 
     if [[ -n "$vpn_key" && -n "$vpn_addr" ]]; then

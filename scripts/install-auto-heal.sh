@@ -1,14 +1,18 @@
 #!/bin/bash
 # Installs the auto-heal launchd job (runs hourly).
 
-set -e
+set -euo pipefail
 
 GREEN='\033[0;32m'
 NC='\033[0m'
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LAUNCH_DIR="$HOME/Library/LaunchAgents"
+LOG_DIR="$HOME/Media/logs/launchd"
 PLIST_NAME="com.media-stack.auto-heal"
-PLIST_PATH="$HOME/Library/LaunchAgents/$PLIST_NAME.plist"
+PLIST_PATH="$LAUNCH_DIR/$PLIST_NAME.plist"
+
+mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
 
 cat > "$PLIST_PATH" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -27,9 +31,9 @@ cat > "$PLIST_PATH" <<EOF
     <key>RunAtLoad</key>
     <true/>
     <key>StandardOutPath</key>
-    <string>/dev/null</string>
+    <string>$LOG_DIR/auto-heal.out.log</string>
     <key>StandardErrorPath</key>
-    <string>/dev/null</string>
+    <string>$LOG_DIR/auto-heal.err.log</string>
 </dict>
 </plist>
 EOF
@@ -38,6 +42,6 @@ launchctl unload "$PLIST_PATH" 2>/dev/null || true
 launchctl load "$PLIST_PATH"
 
 echo -e "${GREEN}Auto-heal installed.${NC} Runs every hour + on login."
-echo "Logs: ~/Media/logs/auto-heal.log"
+echo "Logs: ~/Media/logs/auto-heal.log and ~/Media/logs/launchd/"
 echo ""
 echo "To uninstall: launchctl unload $PLIST_PATH && rm $PLIST_PATH"
