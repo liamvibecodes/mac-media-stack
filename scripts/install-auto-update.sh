@@ -17,8 +17,8 @@ usage() {
     cat <<EOF
 Usage: bash scripts/install-auto-update.sh
 
-Installs the daily (04:00) auto-update launchd job. It moves the stack to the
-latest release, like scripts/update-to-latest-release.sh, then restarts what changed.
+Installs the daily (04:00) auto-update launchd job. It pulls the latest version
+of every image, like scripts/refresh-image-lock.sh, then restarts what changed.
 
 Options:
   --help    Show this help message
@@ -37,10 +37,6 @@ case "${1:-}" in
         exit 1
         ;;
 esac
-
-if [[ -n "$(git -C "$SCRIPT_DIR" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
-    ui_warn "This folder has tracked local changes. Auto-update skips its run until they are committed or stashed."
-fi
 
 mkdir -p "$LAUNCH_DIR" "$LOG_DIR"
 

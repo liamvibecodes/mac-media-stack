@@ -28,7 +28,7 @@ Options:
   --media-dir DIR       Media root path (default: ~/Media)
   --install-dir DIR     Repo install directory (default: ~/mac-media-stack)
   --proxy               Friendly hostnames (seerr.media.lan, radarr.media.lan, ...) via Caddy
-  --auto-update         Update to the latest release every day at 04:00
+  --auto-update         Update every image to its latest version, daily at 04:00
   --mullvad             Use Mullvad instead of ProtonVPN (no port forwarding)
   --non-interactive     Skip interactive prompts (manual Seerr wiring required)
   --help                Show this help message

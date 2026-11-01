@@ -310,10 +310,10 @@ docker compose up -d     # start
 
 ### Update the stack
 
-To get the newest release, run:
+To move every image to its latest version, run:
 
 ```bash
-bash scripts/update-to-latest-release.sh
+bash scripts/refresh-image-lock.sh
 docker compose up -d
 ```
 
@@ -323,10 +323,10 @@ To have the stack do this by itself every day at 04:00, turn on auto-update:
 bash scripts/install-auto-update.sh
 ```
 
-Auto-update moves the stack to the newest release. A release names the exact image versions it was tested with, so the apps only change when a new release is published. Keep these points in mind:
+Auto-update pulls the latest version of every image, the same as `bash scripts/refresh-image-lock.sh`, and restarts the containers that changed. Keep these points in mind:
 
-- It skips its run if you edited a tracked file or made commits of your own in this folder. Your `.env` is safe.
-- When it does run, it resets the project files to the release. Your changes to files such as `docker-compose.yml` are lost.
+- The new image versions are written into `docker-compose.yml` and `IMAGE_LOCK.md`. Git shows them as local changes.
+- A new image version has not been tested with this stack. If an app breaks, run `git checkout docker-compose.yml IMAGE_LOCK.md` and then `docker compose up -d` to go back.
 - Containers restart when their image changes, so a running download pauses for a moment.
 
 The log file is `~/Library/Logs/media-stack/auto-update.log`.

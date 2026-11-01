@@ -1,7 +1,8 @@
 #!/bin/bash
 # Media Stack Auto-Update
-# Runs daily via launchd. Moves the stack to the Image lock of the latest release
-# and recreates the containers whose image changed. Does nothing when already current.
+# Runs daily via launchd. Pulls the latest version of every image, re-pins the
+# digests in the compose files, and recreates the containers whose image changed.
+# Does nothing when every image is already current.
 
 set -o pipefail
 
@@ -30,22 +31,23 @@ log "--- Auto-update started ---"
 
 cd "$PROJECT_DIR" || exit 1
 
-if ! docker info &>/dev/null; then
-    log "ERROR: Container runtime not running. Cannot update."
+if ! docker_error="$(docker info 2>&1 >/dev/null)"; then
+    log "ERROR: Container runtime not running. Cannot update. ${docker_error//$'\n'/ }"
     exit 1
 fi
 
-before="$(git rev-parse HEAD 2>/dev/null)"
-if ! run_logged bash scripts/update-to-latest-release.sh --yes; then
-    log "ERROR: Could not move to the latest release (see above). Stack left as it was."
+# Pins the compose files to what each image's :latest tag points at today.
+before="$(docker compose config --images 2>/dev/null | sort -u)"
+if ! run_logged bash scripts/refresh-image-lock.sh; then
+    log "ERROR: Could not refresh the images (see above). Stack left as it was."
     exit 1
 fi
-after="$(git rev-parse HEAD)"
+after="$(docker compose config --images 2>/dev/null | sort -u)"
 
 if [[ "$before" == "$after" ]]; then
-    log "Already on the latest release"
+    log "Images already up to date"
 else
-    log "Updated to $(git describe --tags --always)"
+    log "New images: $(comm -13 <(echo "$before") <(echo "$after") | tr '\n' ' ')"
 fi
 
 # Images in use now; the ones the update replaces are removed afterwards.
