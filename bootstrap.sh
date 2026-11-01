@@ -18,6 +18,7 @@ INSTALL_DIR="$HOME/mac-media-stack"
 NON_INTERACTIVE=false
 VPN_PROVIDER=protonvpn
 PROXY=false
+AUTO_UPDATE=false
 
 usage() {
     cat <<EOF
@@ -27,6 +28,7 @@ Options:
   --media-dir DIR       Media root path (default: ~/Media)
   --install-dir DIR     Repo install directory (default: ~/mac-media-stack)
   --proxy               Friendly hostnames (seerr.media.lan, radarr.media.lan, ...) via Caddy
+  --auto-update         Update to the latest release every day at 04:00
   --mullvad             Use Mullvad instead of ProtonVPN (no port forwarding)
   --non-interactive     Skip interactive prompts (manual Seerr wiring required)
   --help                Show this help message
@@ -37,6 +39,7 @@ Examples:
   bash bootstrap.sh --media-dir /Volumes/T9/Media --non-interactive
   bash bootstrap.sh --mullvad
   bash bootstrap.sh --proxy
+  bash bootstrap.sh --auto-update
 EOF
 }
 
@@ -64,6 +67,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --proxy)
             PROXY=true
+            shift
+            ;;
+        --auto-update)
+            AUTO_UPDATE=true
             shift
             ;;
         --non-interactive)
@@ -239,6 +246,12 @@ fi
 echo ""
 echo -e "${CYAN}Installing auto-healer...${NC}"
 bash scripts/install-auto-heal.sh
+
+if [[ "$AUTO_UPDATE" == true ]]; then
+    echo ""
+    echo -e "${CYAN}Installing auto-update...${NC}"
+    bash scripts/install-auto-update.sh
+fi
 
 echo ""
 echo "=============================="

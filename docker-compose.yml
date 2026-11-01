@@ -191,18 +191,5 @@ services:
       retries: 3
     restart: unless-stopped
 
-  watchtower:
-    image: containrrr/watchtower@sha256:6dd50763bbd632a83cb154d5451700530d1e44200b268a4e9488fefdfcf2b038
-    container_name: watchtower
-    profiles: ["autoupdate"]
-    environment:
-      - TZ=${TIMEZONE:-America/New_York}
-      - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_SCHEDULE=0 0 4 * * *
-    volumes:
-      # WARNING: Mounting docker.sock gives this container full control over all containers on the host
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
-
 volumes:
   rtorrent-run:

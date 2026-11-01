@@ -46,7 +46,6 @@ There are dozens of *arr stack Docker Compose repos on GitHub. Almost all of the
 | **Gluetun** | VPN container (ProtonVPN or Mullvad, WireGuard) so downloads are private |
 | **Bazarr** | Auto-fetches subtitles |
 | **FlareSolverr** | Bypasses Cloudflare protection on certain indexers |
-| **Watchtower** | Optional auto-updater (opt-in profile) |
 
 ## Requirements
 
@@ -71,6 +70,7 @@ Optional flags when running from a local clone:
 bash bootstrap.sh --media-dir /Volumes/T9/Media --install-dir ~/mac-media-stack --non-interactive
 bash bootstrap.sh --mullvad   # use Mullvad instead of ProtonVPN
 bash bootstrap.sh --proxy     # friendly hostnames like seerr.media.lan
+bash bootstrap.sh --auto-update   # update to the latest release every day at 04:00
 ```
 
 ## Update Existing Clone
@@ -112,7 +112,6 @@ bash scripts/setup.sh        # creates folders, generates .env
 # edit .env and add your VPN keys
 bash scripts/doctor.sh       # preflight validation before first boot
 docker compose up -d         # start everything
-docker compose --profile autoupdate up -d watchtower  # optional auto-updates
 bash scripts/configure.sh    # auto-configure all services
 ```
 
@@ -133,6 +132,8 @@ By default, Seerr is bound to `127.0.0.1` for safer local-only access. Set `SEER
 | `scripts/health-check.sh` | Checks if everything is running correctly |
 | `scripts/auto-heal.sh` | Hourly self-healer (restarts VPN/containers if down) |
 | `scripts/install-auto-heal.sh` | Installs auto-heal as a background job via launchd |
+| `scripts/auto-update.sh` | Daily updater: moves the stack to the latest release and restarts what changed |
+| `scripts/install-auto-update.sh` | Installs auto-update as a background job via launchd (opt-in) |
 | `scripts/setup-hosts.sh` | Adds the friendly hostnames (`--proxy`) to /etc/hosts, or removes them with `--remove` |
 | `scripts/update-to-latest-release.sh` | Updates an older clone to the latest tagged release safely |
 | `scripts/refresh-image-lock.sh` | Refreshes pinned image digests and regenerates IMAGE_LOCK.md |
