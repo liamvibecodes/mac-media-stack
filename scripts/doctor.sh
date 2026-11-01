@@ -57,6 +57,15 @@ ok() { ui_ok "$1"; PASS=$((PASS + 1)); }
 warn() { ui_warn "$1"; WARN=$((WARN + 1)); }
 fail() { ui_fail "$1"; FAIL=$((FAIL + 1)); }
 
+check_not_placeholder() {
+    local key="$1" placeholder="$2"
+    if [[ "$(config_get "$key")" == "$placeholder" ]]; then
+        fail "$key is still a placeholder in .env"
+    else
+        ok "$key appears set"
+    fi
+}
+
 echo ""
 echo "=============================="
 echo "  Media Stack Doctor"
@@ -86,17 +95,8 @@ fi
 # .env
 if [[ -f "$ENV_FILE" ]]; then
     ok ".env exists"
-    if [[ "$(config_get WIREGUARD_PRIVATE_KEY)" == "your_wireguard_private_key_here" ]]; then
-        fail "WIREGUARD_PRIVATE_KEY is still a placeholder in .env"
-    else
-        ok "WIREGUARD_PRIVATE_KEY appears set"
-    fi
-
-    if [[ "$(config_get WIREGUARD_ADDRESSES)" == "your_wireguard_address_here" ]]; then
-        fail "WIREGUARD_ADDRESSES is still a placeholder in .env"
-    else
-        ok "WIREGUARD_ADDRESSES appears set"
-    fi
+    check_not_placeholder WIREGUARD_PRIVATE_KEY your_wireguard_private_key_here
+    check_not_placeholder WIREGUARD_ADDRESSES your_wireguard_address_here
 
     vpn_provider="$(config_get VPN_PROVIDER protonvpn)"
     vpn_pf="$(config_get VPN_PORT_FORWARDING on)"
@@ -128,8 +128,7 @@ if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then
 fi
 
 # Port checks
-PORTS="$(topology_ports)"
-for port in $PORTS; do
+for port in $(topology_ports); do
     owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1}' || true)
     if [[ -z "$owner" ]]; then
         ok "Port $port is free"

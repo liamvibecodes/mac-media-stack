@@ -5,8 +5,6 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-# shellcheck source=scripts/lib/stack-config.sh
-source "$SCRIPT_DIR/lib/stack-config.sh"
 # shellcheck source=scripts/lib/ui.sh
 source "$SCRIPT_DIR/lib/ui.sh"
 

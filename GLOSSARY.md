@@ -41,7 +41,7 @@ Whether each member of the Stack topology is running and, for web UIs, answering
 _Avoid_: Status, liveness
 
 **Answers**:
-A web UI answers when it responds with HTTP 200, 301, 302, 401 or 403. An auth challenge counts, because it means the app is running.
+A web UI answers when it responds with HTTP 200, 301, 302, 307, 308, 401 or 403. An auth challenge counts, because it means the app is running.
 _Avoid_: Up, reachable
 
 **Required / advisory**:
