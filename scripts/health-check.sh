@@ -2,20 +2,13 @@
 # Media Stack Health Check
 # Run this anytime to check if everything is working.
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 # shellcheck source=scripts/lib/runtime.sh
 source "$SCRIPT_DIR/scripts/lib/runtime.sh"
-
-# Load media server choice
-if [[ -f "$SCRIPT_DIR/.env" ]]; then
-    MEDIA_SERVER=$(sed -n 's/^MEDIA_SERVER=//p' "$SCRIPT_DIR/.env" | head -1)
-fi
-MEDIA_SERVER="${MEDIA_SERVER:-plex}"
+# shellcheck source=scripts/lib/topology.sh
+source "$SCRIPT_DIR/scripts/lib/topology.sh"
+# shellcheck source=scripts/lib/vpn.sh
+source "$SCRIPT_DIR/scripts/lib/vpn.sh"
 
 echo ""
 echo "=============================="
@@ -26,18 +19,24 @@ echo ""
 PASS=0
 FAIL=0
 
-check_service() {
-    local name="$1"
-    local url="$2"
-    local expected="${3:-200}"
+pass() { ui_ok "$1"; PASS=$((PASS + 1)); }
+flunk() { ui_fail "$1"; FAIL=$((FAIL + 1)); }
 
-    status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$url" 2>/dev/null)
-    if [[ "$status" == "$expected" || "$status" == "302" || "$status" == "301" ]]; then
-        echo -e "  ${GREEN}OK${NC}  $name"
-        ((PASS++))
+http_status() {
+    curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$1" 2>/dev/null
+}
+
+reachable() {
+    [[ "$(http_status "$1")" =~ ^(200|301|302)$ ]]
+}
+
+check_service() {
+    local name="$1" url="$2" status
+    status="$(http_status "$url")"
+    if [[ "$status" =~ ^(200|301|302)$ ]]; then
+        pass "$name"
     else
-        echo -e "  ${RED}FAIL${NC}  $name (got HTTP $status)"
-        ((FAIL++))
+        flunk "$name (got HTTP $status)"
     fi
 }
 
@@ -45,10 +44,9 @@ RUNTIME=$(detect_installed_runtime)
 
 if docker info &>/dev/null; then
     RUNTIME=$(detect_running_runtime)
-    echo -e "  ${GREEN}OK${NC}  $RUNTIME"
-    ((PASS++))
+    pass "$RUNTIME"
 else
-    echo -e "  ${RED}FAIL${NC}  $RUNTIME (not running)"
+    flunk "$RUNTIME (not running)"
     echo ""
     echo "Start $RUNTIME and try again."
     exit 1
@@ -58,84 +56,53 @@ echo ""
 
 # Check containers are running
 echo "Containers:"
-for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr; do
-    state=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)
+while IFS='|' read -r container label url probe; do
+    [[ -n "$container" ]] || continue
+    state=$(docker inspect -f '{{.State.Status}}' "$container" 2>/dev/null)
     if [[ "$state" == "running" ]]; then
-        echo -e "  ${GREEN}OK${NC}  $name"
-        ((PASS++))
+        pass "$container"
     else
-        echo -e "  ${RED}FAIL${NC}  $name (${state:-not found})"
-        ((FAIL++))
+        flunk "$container (${state:-not found})"
     fi
-done
-
-if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    jf_state=$(docker inspect -f '{{.State.Status}}' jellyfin 2>/dev/null)
-    if [[ "$jf_state" == "running" ]]; then
-        echo -e "  ${GREEN}OK${NC}  jellyfin"
-        ((PASS++))
-    else
-        echo -e "  ${RED}FAIL${NC}  jellyfin (${jf_state:-not found})"
-        ((FAIL++))
-    fi
-fi
+done < <(topology_entries)
 
 watchtower_state=$(docker inspect -f '{{.State.Status}}' watchtower 2>/dev/null || true)
 if [[ "$watchtower_state" == "running" ]]; then
-    echo -e "  ${GREEN}OK${NC}  watchtower (autoupdate profile enabled)"
-    ((PASS++))
+    pass "watchtower (autoupdate profile enabled)"
 else
-    echo -e "  ${YELLOW}SKIP${NC}  watchtower (optional; enable with --profile autoupdate)"
+    ui_skip "watchtower (optional; enable with --profile autoupdate)"
 fi
 
 echo ""
 echo "Web UIs:"
-check_service "qBittorrent" "http://localhost:8080"
-check_service "Prowlarr" "http://localhost:9696"
-check_service "Sonarr" "http://localhost:8989"
-check_service "Radarr" "http://localhost:7878"
-check_service "Bazarr" "http://localhost:6767"
-check_service "Seerr" "http://localhost:5055"
+while IFS='|' read -r container label url probe; do
+    [[ -n "$url" && "$probe" == "required" ]] || continue
+    check_service "$label" "$url"
+done < <(topology_entries)
 
 echo ""
 echo "VPN:"
-vpn_ip=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/ip 2>/dev/null || true' 2>/dev/null)
-vpn_iface=$(docker exec gluetun sh -lc 'ls /sys/class/net 2>/dev/null | grep -E "^(tun|wg)[0-9]+$" | head -1' 2>/dev/null)
-vpn_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' gluetun 2>/dev/null || true)
-if [[ -n "$vpn_ip" && -n "$vpn_iface" && "$vpn_health" != "unhealthy" ]]; then
-    echo -e "  ${GREEN}OK${NC}  VPN active (IP: $vpn_ip, iface: $vpn_iface, health: ${vpn_health:-unknown})"
-    ((PASS++))
-elif [[ -z "$vpn_ip" ]]; then
-    echo -e "  ${RED}FAIL${NC}  VPN not connected (missing /tmp/gluetun/ip)"
-    ((FAIL++))
-elif [[ -z "$vpn_iface" ]]; then
-    echo -e "  ${RED}FAIL${NC}  VPN tunnel interface not detected in gluetun"
-    ((FAIL++))
+if vpn_probe; then
+    pass "VPN active (IP: $VPN_IP, iface: $VPN_IFACE, health: $VPN_HEALTH)"
 else
-    echo -e "  ${RED}FAIL${NC}  VPN health is unhealthy"
-    ((FAIL++))
+    case "$VPN_STATE" in
+        no-ip) flunk "VPN not connected (missing /tmp/gluetun/ip)" ;;
+        no-iface) flunk "VPN tunnel interface not detected in gluetun" ;;
+        *) flunk "VPN health is unhealthy" ;;
+    esac
 fi
 
-echo ""
-if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    echo "Jellyfin:"
-    jf_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:8096/health" 2>/dev/null)
-    if [[ "$jf_status" == "200" ]]; then
-        echo -e "  ${GREEN}OK${NC}  Jellyfin (http://localhost:8096)"
-        ((PASS++))
+# Emby: advisory, since it may still be starting
+while IFS='|' read -r container label url probe; do
+    [[ -n "$url" && "$probe" == "advisory" ]] || continue
+    echo ""
+    echo "$label:"
+    if reachable "$url"; then
+        pass "$label ($url)"
     else
-        echo -e "  ${YELLOW}SKIP${NC}  Jellyfin not reachable yet (may still be starting)"
+        ui_skip "$label not reachable yet (may still be starting)"
     fi
-else
-    echo "Plex:"
-    plex_status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "http://localhost:32400/web" 2>/dev/null)
-    if [[ "$plex_status" == "200" || "$plex_status" == "302" || "$plex_status" == "301" ]]; then
-        echo -e "  ${GREEN}OK${NC}  Plex (http://localhost:32400/web)"
-        ((PASS++))
-    else
-        echo -e "  ${YELLOW}SKIP${NC}  Plex not detected (install separately, see SETUP.md)"
-    fi
-fi
+done < <(topology_entries)
 
 echo ""
 echo "=============================="

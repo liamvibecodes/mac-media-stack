@@ -18,6 +18,9 @@ jobs:
             bash -n "$f"
           done < <(find scripts -type f -name '*.sh' -print0)
 
+      - name: Run unit tests
+        run: bash tests/run.sh
+
       - name: Validate media path usage
         run: |
           # Automation scripts must resolve MEDIA_DIR from env/.env, not hardcode $HOME/Media.
@@ -27,5 +30,6 @@ jobs:
         run: |
           cp .env.example .env
           docker compose --profile autoupdate config >/dev/null
-          docker compose --profile jellyfin config >/dev/null
+          VPN_PROVIDER=mullvad VPN_PORT_FORWARDING=off docker compose config >/dev/null
+          docker compose -f docker-compose.yml -f docker-compose.proxy.yml config >/dev/null
           rm .env

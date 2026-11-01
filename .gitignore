@@ -1,6 +1,6 @@
 .env
 config/
-Downloads/
-Movies/
-TV Shows/
+downloads/
+movies/
+tvshows/
 logs/

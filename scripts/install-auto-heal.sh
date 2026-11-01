@@ -4,15 +4,13 @@
 
 set -euo pipefail
 
-GREEN='\033[0;32m'
-NC='\033[0m'
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=scripts/lib/media-path.sh
-source "$SCRIPT_DIR/lib/media-path.sh"
+# shellcheck source=scripts/lib/stack-config.sh
+source "$SCRIPT_DIR/lib/stack-config.sh"
+# shellcheck source=scripts/lib/ui.sh
+source "$SCRIPT_DIR/lib/ui.sh"
 
-MEDIA_DIR="$(resolve_media_dir "$PROJECT_DIR")"
+MEDIA_DIR="$(stack_media_dir)"
 LAUNCH_DIR="$HOME/Library/LaunchAgents"
 LOG_DIR="$MEDIA_DIR/logs/launchd"
 PLIST_NAME="com.media-stack.auto-heal"

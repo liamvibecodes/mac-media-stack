@@ -1,0 +1,25 @@
+# Optional override: friendly hostnames for every web UI (seerr.media.lan, radarr.media.lan, ...).
+#
+# Enable with: bash bootstrap.sh --proxy
+# or set these lines in .env:
+#   PROXY_DOMAIN=media.lan
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.proxy.yml
+# Then make the names resolve: bash scripts/setup-hosts.sh (adds them to /etc/hosts on this Mac),
+# or add DNS records on your router instead and skip the script (see SETUP.md).
+#
+# Caddy routes by hostname (see Caddyfile) to the containers over the Docker network.
+# The apps keep their 127.0.0.1 ports, so nothing else becomes reachable.
+# Set PROXY_BIND_IP=0.0.0.0 in .env only if other devices on your LAN should use the names too
+# (they then need DNS records for the names pointing at this Mac).
+
+services:
+  caddy:
+    image: caddy@sha256:36c24ad91a7ff7bc4c87fe22bfa8df3c4b18da0773d73fc12ee2c52b98c0bb7e
+    container_name: caddy
+    environment:
+      - PROXY_DOMAIN=${PROXY_DOMAIN:-media.lan}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    ports:
+      - ${PROXY_BIND_IP:-127.0.0.1}:80:80
+    restart: unless-stopped

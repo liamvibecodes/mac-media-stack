@@ -5,12 +5,20 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-COMPOSE_FILE="$SCRIPT_DIR/docker-compose.yml"
+# shellcheck source=scripts/lib/stack-config.sh
+source "$SCRIPT_DIR/scripts/lib/stack-config.sh"
+
+# Lock every compose file: the base plus all optional overrides.
+COMPOSE_FILES=()
+IFS=: read -r -a compose_names <<<"$(stack_compose_files true)"
+for name in "${compose_names[@]}"; do
+    COMPOSE_FILES+=("$SCRIPT_DIR/$name")
+done
 LOCK_FILE="$SCRIPT_DIR/IMAGE_LOCK.md"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-PROFILES=(autoupdate jellyfin)
-OPTIONAL_SERVICES=(watchtower jellyfin)
+PROFILES=(autoupdate)
+OPTIONAL_SERVICES=(watchtower caddy)
 
 for cmd in docker awk sed mktemp; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -19,13 +27,19 @@ for cmd in docker awk sed mktemp; do
     fi
 done
 
-if [[ ! -f "$COMPOSE_FILE" ]]; then
-    echo "Could not find $COMPOSE_FILE"
-    exit 1
-fi
+for file in "${COMPOSE_FILES[@]}"; do
+    if [[ ! -f "$file" ]]; then
+        echo "Could not find $file"
+        exit 1
+    fi
+done
 
 compose() {
-    docker compose "${PROFILE_ARGS[@]}" "$@"
+    local file_args=()
+    for file in "${COMPOSE_FILES[@]}"; do
+        file_args+=(-f "$file")
+    done
+    docker compose "${file_args[@]}" "${PROFILE_ARGS[@]}" "$@"
 }
 
 PROFILE_ARGS=()
@@ -89,24 +103,27 @@ while IFS='|' read -r service image_ref; do
     sed -i '' -E "s#^${service}\\|.*#${service}|${digest}#" "$tmp_map"
 done < "$tmp_map"
 
-awk -F'|' '
-    NR==FNR { lock[$1]=$2; next }
-    /^[ ]{2}[a-zA-Z0-9_-]+:$/ {
-        svc=$0
-        sub(/^[ ]{2}/, "", svc)
-        sub(/:$/, "", svc)
-        current=svc
-        print
-        next
-    }
-    /^[ ]{4}image:/ && (current in lock) {
-        print "    image: " lock[current]
-        next
-    }
-    { print }
-' "$tmp_map" "$COMPOSE_FILE" > "$tmp_compose"
+for target in "${COMPOSE_FILES[@]}"; do
+    awk -F'|' '
+        NR==FNR { lock[$1]=$2; next }
+        /^[ ]{2}[a-zA-Z0-9_-]+:$/ {
+            svc=$0
+            sub(/^[ ]{2}/, "", svc)
+            sub(/:$/, "", svc)
+            current=svc
+            print
+            next
+        }
+        /^[ ]{4}image:/ && (current in lock) {
+            print "    image: " lock[current]
+            next
+        }
+        { print }
+    ' "$tmp_map" "$target" > "$tmp_compose"
 
-mv "$tmp_compose" "$COMPOSE_FILE"
+    mv "$tmp_compose" "$target"
+    chmod 644 "$target"
+done
 
 docker_engine="$(docker version --format '{{.Server.Version}}')"
 platform="$(docker info --format '{{.Architecture}} ({{.OperatingSystem}})')"
@@ -145,5 +162,7 @@ date_utc="$(date -u +%F)"
 } > "$LOCK_FILE"
 
 echo "Updated:"
-echo "  - $COMPOSE_FILE"
+for file in "${COMPOSE_FILES[@]}"; do
+    echo "  - $file"
+done
 echo "  - $LOCK_FILE"

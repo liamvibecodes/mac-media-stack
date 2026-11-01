@@ -3,11 +3,12 @@
 # Runs hourly via launchd. Checks VPN and container health, restarts what's broken.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# shellcheck source=scripts/lib/media-path.sh
-source "$SCRIPT_DIR/lib/media-path.sh"
+# shellcheck source=scripts/lib/topology.sh
+source "$SCRIPT_DIR/lib/topology.sh"
+# shellcheck source=scripts/lib/vpn.sh
+source "$SCRIPT_DIR/lib/vpn.sh"
 
-MEDIA_DIR="$(resolve_media_dir "$PROJECT_DIR")"
+MEDIA_DIR="$(stack_media_dir)"
 LOG_DIR="$MEDIA_DIR/logs"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/auto-heal.log"
@@ -31,37 +32,33 @@ fi
 
 HEALED=0
 
-# Check VPN tunnel
-vpn_ip=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/ip 2>/dev/null || true' 2>/dev/null)
-vpn_iface=$(docker exec gluetun sh -lc 'ls /sys/class/net 2>/dev/null | grep -E "^(tun|wg)[0-9]+$" | head -1' 2>/dev/null)
-vpn_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' gluetun 2>/dev/null || true)
+vpn_summary() { echo "health=$VPN_HEALTH, ip=${VPN_IP:-none}, iface=${VPN_IFACE:-none}"; }
 
-if [[ -z "$vpn_ip" || -z "$vpn_iface" || "$vpn_health" == "unhealthy" ]]; then
-    log "WARN: VPN status unhealthy (health=${vpn_health:-unknown}, ip=${vpn_ip:-none}, iface=${vpn_iface:-none}). Restarting gluetun..."
-    docker restart gluetun >> "$LOG" 2>&1
-    sleep 15
-    vpn_ip=$(docker exec gluetun sh -lc 'cat /tmp/gluetun/ip 2>/dev/null || true' 2>/dev/null)
-    vpn_iface=$(docker exec gluetun sh -lc 'ls /sys/class/net 2>/dev/null | grep -E "^(tun|wg)[0-9]+$" | head -1' 2>/dev/null)
-    vpn_health=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' gluetun 2>/dev/null || true)
-    if [[ -n "$vpn_ip" && -n "$vpn_iface" && "$vpn_health" != "unhealthy" ]]; then
-        log "OK: VPN recovered (IP: $vpn_ip, iface=$vpn_iface, health=${vpn_health:-unknown})"
-        ((HEALED++))
-    else
-        log "ERROR: VPN still down after restart (health=${vpn_health:-unknown}, ip=${vpn_ip:-none}, iface=${vpn_iface:-none})"
-    fi
+# Check VPN tunnel
+if vpn_probe; then
+    log "OK: VPN active (IP: $VPN_IP, iface=$VPN_IFACE, health=$VPN_HEALTH)"
 else
-    log "OK: VPN active (IP: $vpn_ip, iface=$vpn_iface, health=${vpn_health:-unknown})"
+    log "WARN: VPN status unhealthy ($(vpn_summary)). Restarting gluetun..."
+    docker restart "$VPN_CONTAINER" >> "$LOG" 2>&1
+    sleep 15
+    if vpn_probe; then
+        log "OK: VPN recovered (IP: $VPN_IP, iface=$VPN_IFACE, health=$VPN_HEALTH)"
+        HEALED=$((HEALED + 1))
+    else
+        log "ERROR: VPN still down after restart ($(vpn_summary))"
+    fi
 fi
 
-# Check core containers are running
-for name in gluetun qbittorrent prowlarr sonarr radarr bazarr flaresolverr seerr; do
+# Check every container in the stack is running
+while IFS='|' read -r name label url probe; do
+    [[ -n "$name" ]] || continue
     state=$(docker inspect -f '{{.State.Status}}' "$name" 2>/dev/null)
     if [[ "$state" != "running" ]]; then
-        log "WARN: $name is $state. Starting..."
+        log "WARN: $name is ${state:-not found}. Starting..."
         docker start "$name" >> "$LOG" 2>&1
-        ((HEALED++))
+        HEALED=$((HEALED + 1))
     fi
-done
+done < <(topology_entries)
 
 if [[ $HEALED -gt 0 ]]; then
     log "Healed $HEALED issue(s)"

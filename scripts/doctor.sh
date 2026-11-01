@@ -4,15 +4,11 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
 SCRIPT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-ENV_FILE="$SCRIPT_DIR/.env"
-MEDIA_DIR="$HOME/Media"
+# shellcheck source=scripts/lib/topology.sh
+source "$SCRIPT_DIR/scripts/lib/topology.sh"
+ENV_FILE="$(stack_env_file)"
+MEDIA_DIR=""
 
 PASS=0
 WARN=0
@@ -52,26 +48,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -f "$ENV_FILE" ]]; then
-    env_media=$(sed -n 's/^MEDIA_DIR=//p' "$ENV_FILE" | head -1)
-    if [[ -n "$env_media" ]]; then
-        MEDIA_DIR="$env_media"
-    fi
-fi
+MEDIA_DIR="${MEDIA_DIR:-$(stack_media_dir)}"
 MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
+CONFIG_DIR="$(config_get_path CONFIG_DIR "$MEDIA_DIR/config")"
+PROXY_DOMAIN="$(stack_proxy_domain)"
 
-# Load media server choice
-MEDIA_SERVER="plex"
-if [[ -f "$ENV_FILE" ]]; then
-    env_server=$(sed -n 's/^MEDIA_SERVER=//p' "$ENV_FILE" | head -1)
-    if [[ -n "$env_server" ]]; then
-        MEDIA_SERVER="$env_server"
-    fi
-fi
-
-ok() { echo -e "  ${GREEN}OK${NC}   $1"; PASS=$((PASS + 1)); }
-warn() { echo -e "  ${YELLOW}WARN${NC} $1"; WARN=$((WARN + 1)); }
-fail() { echo -e "  ${RED}FAIL${NC} $1"; FAIL=$((FAIL + 1)); }
+ok() { ui_ok "$1"; PASS=$((PASS + 1)); }
+warn() { ui_warn "$1"; WARN=$((WARN + 1)); }
+fail() { ui_fail "$1"; FAIL=$((FAIL + 1)); }
 
 echo ""
 echo "=============================="
@@ -102,23 +86,31 @@ fi
 # .env
 if [[ -f "$ENV_FILE" ]]; then
     ok ".env exists"
-    if grep -q '^WIREGUARD_PRIVATE_KEY=your_wireguard_private_key_here' "$ENV_FILE"; then
+    if [[ "$(config_get WIREGUARD_PRIVATE_KEY)" == "your_wireguard_private_key_here" ]]; then
         fail "WIREGUARD_PRIVATE_KEY is still a placeholder in .env"
     else
         ok "WIREGUARD_PRIVATE_KEY appears set"
     fi
 
-    if grep -q '^WIREGUARD_ADDRESSES=your_wireguard_address_here' "$ENV_FILE"; then
+    if [[ "$(config_get WIREGUARD_ADDRESSES)" == "your_wireguard_address_here" ]]; then
         fail "WIREGUARD_ADDRESSES is still a placeholder in .env"
     else
         ok "WIREGUARD_ADDRESSES appears set"
+    fi
+
+    vpn_provider="$(config_get VPN_PROVIDER protonvpn)"
+    vpn_pf="$(config_get VPN_PORT_FORWARDING on)"
+    if [[ "$vpn_provider" == "mullvad" && "$vpn_pf" != "off" ]]; then
+        fail "VPN_PROVIDER=mullvad needs VPN_PORT_FORWARDING=off in .env (Mullvad has no port forwarding)"
+    else
+        ok "VPN provider: $vpn_provider (port forwarding $vpn_pf)"
     fi
 else
     fail ".env is missing (run: bash scripts/setup.sh)"
 fi
 
 # Media directories
-for dir in "$MEDIA_DIR" "$MEDIA_DIR/Downloads" "$MEDIA_DIR/Movies" "$MEDIA_DIR/TV Shows" "$MEDIA_DIR/config"; do
+for dir in "$MEDIA_DIR" "$MEDIA_DIR/downloads" "$MEDIA_DIR/movies" "$MEDIA_DIR/tvshows" "$CONFIG_DIR"; do
     if [[ -d "$dir" ]]; then
         ok "Directory exists: $dir"
     else
@@ -128,7 +120,7 @@ done
 
 # Compose render
 if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then
-    if docker compose -f "$SCRIPT_DIR/docker-compose.yml" config >/dev/null 2>&1; then
+    if (cd "$SCRIPT_DIR" && docker compose config >/dev/null 2>&1); then
         ok "docker-compose.yml renders with current .env"
     else
         fail "docker-compose.yml failed to render (check .env values)"
@@ -136,14 +128,9 @@ if [[ -f "$SCRIPT_DIR/docker-compose.yml" ]] && [[ -f "$ENV_FILE" ]]; then
 fi
 
 # Port checks
-PORTS=(5055 9696 8989 7878 8080 6767 8191)
-if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    PORTS+=(8096)
-else
-    PORTS+=(32400)
-fi
-for port in "${PORTS[@]}"; do
-    owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1}')
+PORTS="$(topology_ports)"
+for port in $PORTS; do
+    owner=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN 2>/dev/null | awk 'NR==2{print $1}' || true)
     if [[ -z "$owner" ]]; then
         ok "Port $port is free"
     else
@@ -151,13 +138,13 @@ for port in "${PORTS[@]}"; do
     fi
 done
 
-# Media server check
-if [[ "$MEDIA_SERVER" == "jellyfin" ]]; then
-    ok "Media server: Jellyfin (runs in Docker)"
-elif [[ -d "/Applications/Plex Media Server.app" ]] || pgrep -x "Plex Media Server" >/dev/null 2>&1; then
-    ok "Plex Media Server detected"
-else
-    warn "Plex Media Server not detected yet"
+# Hostnames (only when the proxy override is enabled)
+if stack_proxy_enabled; then
+    if dscacheutil -q host -a name "seerr.$PROXY_DOMAIN" 2>/dev/null | grep -Eq 'ip(v6)?_address'; then
+        ok "Hostnames: seerr.$PROXY_DOMAIN resolves"
+    else
+        warn "seerr.$PROXY_DOMAIN does not resolve (run: bash scripts/setup-hosts.sh, or add DNS records on your router)"
+    fi
 fi
 
 echo ""

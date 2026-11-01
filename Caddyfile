@@ -1,0 +1,62 @@
+# Hostname routing for the media stack. Used by docker-compose.proxy.yml.
+# PROXY_DOMAIN comes from .env (default media.lan). Plain HTTP on purpose:
+# this is a local/private setup, so no certificates are needed.
+{
+	auto_https off
+	admin off
+}
+
+http://{$PROXY_DOMAIN:media.lan} {
+	header Content-Type "text/html; charset=utf-8"
+	respond <<HTML
+		<!doctype html><meta charset="utf-8"><title>Media stack</title>
+		<style>body{font:16px system-ui;margin:3rem auto;max-width:28rem}a{display:block;padding:.4rem 0}</style>
+		<h2>Media stack</h2>
+		<a href="http://seerr.{$PROXY_DOMAIN:media.lan}">Seerr (request)</a>
+		<a href="http://emby.{$PROXY_DOMAIN:media.lan}">Emby (watch)</a>
+		<a href="http://radarr.{$PROXY_DOMAIN:media.lan}">Radarr</a>
+		<a href="http://sonarr.{$PROXY_DOMAIN:media.lan}">Sonarr</a>
+		<a href="http://prowlarr.{$PROXY_DOMAIN:media.lan}">Prowlarr</a>
+		<a href="http://bazarr.{$PROXY_DOMAIN:media.lan}">Bazarr</a>
+		<a href="http://flood.{$PROXY_DOMAIN:media.lan}">Flood (rTorrent)</a>
+		<a href="http://rutorrent.{$PROXY_DOMAIN:media.lan}">ruTorrent</a>
+		HTML 200
+}
+
+http://seerr.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy seerr:5055
+}
+
+http://radarr.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy radarr:7878
+}
+
+http://sonarr.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy sonarr:8989
+}
+
+http://prowlarr.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy prowlarr:9696
+}
+
+http://bazarr.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy bazarr:6767
+}
+
+http://emby.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy emby:8096
+}
+
+# Flood runs as its own container; ruTorrent lives behind the VPN container (gluetun).
+http://flood.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy flood:3000
+}
+
+http://rutorrent.{$PROXY_DOMAIN:media.lan} {
+	reverse_proxy gluetun:8080
+}
+
+# Anything else: clear error instead of an empty page.
+http:// {
+	respond "Unknown host. Open http://{$PROXY_DOMAIN:media.lan} for the list." 404
+}

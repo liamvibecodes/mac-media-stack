@@ -5,11 +5,9 @@
 
 set -euo pipefail
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-NC='\033[0m'
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/lib/ui.sh
+source "$SCRIPT_DIR/lib/ui.sh"
 
 ASSUME_YES=false
 FORCE=false
@@ -29,10 +27,7 @@ Options:
 EOF
 }
 
-log() { echo -e "${GREEN}OK${NC}  $1"; }
-warn() { echo -e "${YELLOW}WARN${NC}  $1"; }
-info() { echo -e "${CYAN}..${NC}  $1"; }
-fail() { echo -e "${RED}FAIL${NC}  $1"; exit 1; }
+fail() { ui_fail "$1"; exit 1; }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -84,7 +79,7 @@ if [[ -n "$current_branch" ]]; then
     fi
 fi
 
-info "Fetching tags from origin..."
+ui_info "Fetching tags from origin..."
 git fetch origin --tags --prune >/dev/null
 
 latest_tag="$(git tag -l 'v*' --sort=-version:refname | head -1)"
@@ -103,7 +98,7 @@ echo "Target SHA:   $target_sha"
 echo ""
 
 if [[ "$current_sha" == "$target_sha" ]]; then
-    log "Already on latest release ($latest_tag)"
+    ui_ok "Already on latest release ($latest_tag)"
 else
     if [[ "$ASSUME_YES" != true ]]; then
         read -r -p "Update this clone to $latest_tag? [y/N] " confirm
@@ -114,7 +109,7 @@ else
     fi
 
     if [[ -z "$current_branch" ]]; then
-        warn "Detached HEAD detected. Checking out 'main' before reset."
+        ui_warn "Detached HEAD detected. Checking out 'main' before reset."
         if git show-ref --verify --quiet refs/heads/main; then
             git checkout main >/dev/null
         else
@@ -124,19 +119,21 @@ else
     fi
 
     git reset --hard "$target_sha" >/dev/null
-    log "Updated $current_branch to $latest_tag"
+    ui_ok "Updated $current_branch to $latest_tag"
 fi
 
 if [[ "$SKIP_SETUP" != true && -x scripts/setup.sh ]]; then
-    media_dir="$(sed -n 's/^MEDIA_DIR=//p' .env 2>/dev/null | head -1)"
-    media_dir="${media_dir/#\~/$HOME}"
-    info "Running setup sync (scripts/setup.sh)"
+    # The updated checkout provides the config module, so load it only now.
+    # shellcheck source=scripts/lib/stack-config.sh
+    source scripts/lib/stack-config.sh
+    media_dir="$(config_get_path MEDIA_DIR)"
+    ui_info "Running setup sync (scripts/setup.sh)"
     if [[ -n "$media_dir" ]]; then
         bash scripts/setup.sh --media-dir "$media_dir" >/dev/null
     else
         bash scripts/setup.sh >/dev/null
     fi
-    log "Setup sync complete"
+    ui_ok "Setup sync complete"
 fi
 
 echo ""

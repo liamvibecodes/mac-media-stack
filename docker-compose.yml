@@ -10,22 +10,27 @@ services:
     env_file:
       - ./.env
     environment:
-      - VPN_SERVICE_PROVIDER=protonvpn
+      # Provider options live in .env: VPN_PROVIDER=protonvpn (default) or mullvad.
+      # Mullvad has no port forwarding, so use VPN_PORT_FORWARDING=off with it.
+      - VPN_SERVICE_PROVIDER=${VPN_PROVIDER:-protonvpn}
       - VPN_TYPE=wireguard
-      - SERVER_COUNTRIES=United States
-      - PORT_FORWARD_ONLY=on
-      - VPN_PORT_FORWARDING=on
-      - VPN_PORT_FORWARDING_PROVIDER=protonvpn
-      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":{{PORT}},\"current_network_interface\":\"{{VPN_INTERFACE}}\",\"random_port\":false,\"upnp\":false}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
-      - VPN_PORT_FORWARDING_DOWN_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --post-data "json={\"listen_port\":0,\"current_network_interface\":\"lo\"}" http://127.0.0.1:8080/api/v2/app/setPreferences 2>&1'
+      - SERVER_COUNTRIES=${VPN_COUNTRIES:-United States}
+      - PORT_FORWARD_ONLY=${VPN_PORT_FORWARDING:-on}
+      - VPN_PORT_FORWARDING=${VPN_PORT_FORWARDING:-on}
+      - VPN_PORT_FORWARDING_PROVIDER=${VPN_PROVIDER:-protonvpn}
+      # gluetun's own control server defaults to :8000, which rTorrent's XMLRPC needs
+      # (same network namespace), so move it out of the way.
+      - HTTP_CONTROL_SERVER_ADDRESS=:8010
+      # When the VPN forwards a port, tell rTorrent to listen on it.
+      - VPN_PORT_FORWARDING_UP_COMMAND=/bin/sh -c 'wget -O- --retry-connrefused --header=Content-Type:text/xml --post-data "<?xml version=\"1.0\"?><methodCall><methodName>network.listen.port.set</methodName><params><param><value><string></string></value></param><param><value><i8>{{PORT}}</i8></value></param></params></methodCall>" http://127.0.0.1:8000/RPC2 2>&1'
       - TZ=${TIMEZONE:-America/New_York}
     ports:
-      - 127.0.0.1:8080:8080    # qbittorrent webui
+      - 127.0.0.1:8080:8080    # ruTorrent webui (rTorrent shares this network)
     restart: unless-stopped
 
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent@sha256:85eb27d2d09cd4cb748036a4c7f261321da516b6f88229176cf05a92ccd26815
-    container_name: qbittorrent
+  rtorrent:
+    image: crazymax/rtorrent-rutorrent@sha256:a6577938d9b2d1e9038a9989c395990738c984ff6d7a2037a082a06bb4ab8a2d
+    container_name: rtorrent
     network_mode: "service:gluetun"
     depends_on:
       - gluetun
@@ -33,17 +38,34 @@ services:
       - PUID=${PUID:-501}
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
-      - WEBUI_PORT=8080
     volumes:
-      - ${MEDIA_DIR}/config/qbittorrent:/config
-      - ${MEDIA_DIR}/Downloads:/downloads
-      - ${MEDIA_DIR}/Movies:/movies
-      - ${MEDIA_DIR}/TV Shows:/tv
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080 || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      # rTorrent config and session files (local disk, not the NAS)
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/rtorrent:/data
+      # Downloads land in /downloads/complete/<label>; Radarr/Sonarr map this path to /data/downloads
+      - ${MEDIA_DIR}/downloads:/downloads
+      - rtorrent-run:/var/run/rtorrent
+    restart: unless-stopped
+
+  flood:
+    image: jesec/flood@sha256:241f172786fe958a09a55615cb4cd1b15d0aec9751f2d87dd8d7a67bcd24f0fa
+    container_name: flood
+    user: "${PUID:-501}:${PGID:-20}"
+    command:
+      - --host
+      - 0.0.0.0
+      - --rundir
+      - /flood-data
+      - --auth
+      - none
+      - --rtsocket
+      - /var/run/rtorrent/scgi.socket
+    depends_on:
+      - rtorrent
+    volumes:
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/flood:/flood-data
+      - rtorrent-run:/var/run/rtorrent
+    ports:
+      - 127.0.0.1:3000:3000
     restart: unless-stopped
 
   prowlarr:
@@ -54,7 +76,7 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/prowlarr:/config
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/prowlarr:/config
     ports:
       - 127.0.0.1:9696:9696
     healthcheck:
@@ -72,9 +94,8 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/sonarr:/config
-      - ${MEDIA_DIR}/TV Shows:/tv
-      - ${MEDIA_DIR}/Downloads:/downloads
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/sonarr:/config
+      - ${MEDIA_DIR}:/data
     ports:
       - 127.0.0.1:8989:8989
     healthcheck:
@@ -92,9 +113,8 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/radarr:/config
-      - ${MEDIA_DIR}/Movies:/movies
-      - ${MEDIA_DIR}/Downloads:/downloads
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/radarr:/config
+      - ${MEDIA_DIR}:/data
     ports:
       - 127.0.0.1:7878:7878
     healthcheck:
@@ -112,9 +132,8 @@ services:
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/bazarr:/config
-      - ${MEDIA_DIR}/Movies:/movies
-      - ${MEDIA_DIR}/TV Shows:/tv
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/bazarr:/config
+      - ${MEDIA_DIR}:/data
     ports:
       - 127.0.0.1:6767:6767
     healthcheck:
@@ -142,7 +161,7 @@ services:
     environment:
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/seerr:/app/config
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/seerr:/app/config
     ports:
       - ${SEERR_BIND_IP:-127.0.0.1}:5055:5055
     healthcheck:
@@ -152,22 +171,21 @@ services:
       retries: 3
     restart: unless-stopped
 
-  jellyfin:
-    image: lscr.io/linuxserver/jellyfin@sha256:4ee07757abcaa0b74fbc74179392311dc2874c03b0bef04bc2d79e9e1a875793
-    container_name: jellyfin
-    profiles: ["jellyfin"]
+  emby:
+    image: lscr.io/linuxserver/emby@sha256:4c3d0b88b7d8b79ee656ff016fd049b51585753ddbb9db984d6c230c39b4df74
+    container_name: emby
     environment:
       - PUID=${PUID:-501}
       - PGID=${PGID:-20}
       - TZ=${TIMEZONE:-America/New_York}
     volumes:
-      - ${MEDIA_DIR}/config/jellyfin:/config
-      - ${MEDIA_DIR}/Movies:/data/movies
-      - ${MEDIA_DIR}/TV Shows:/data/tvshows
+      - ${CONFIG_DIR:-${MEDIA_DIR}/config}/emby:/config
+      - ${MEDIA_DIR}/movies:/data/movies
+      - ${MEDIA_DIR}/tvshows:/data/tvshows
     ports:
       - 127.0.0.1:8096:8096
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8096/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8096/emby/System/Ping || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -185,3 +203,6 @@ services:
       # WARNING: Mounting docker.sock gives this container full control over all containers on the host
       - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
+
+volumes:
+  rtorrent-run:
