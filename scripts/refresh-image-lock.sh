@@ -34,18 +34,17 @@ for file in "${COMPOSE_FILES[@]}"; do
     fi
 done
 
-compose() {
-    local file_args=()
-    for file in "${COMPOSE_FILES[@]}"; do
-        file_args+=(-f "$file")
-    done
-    docker compose "${file_args[@]}" "${PROFILE_ARGS[@]}" "$@"
-}
-
-PROFILE_ARGS=()
-for profile in "${PROFILES[@]}"; do
-    PROFILE_ARGS+=(--profile "$profile")
+COMPOSE_ARGS=()
+for file in "${COMPOSE_FILES[@]}"; do
+    COMPOSE_ARGS+=(-f "$file")
 done
+for profile in "${PROFILES[@]}"; do
+    COMPOSE_ARGS+=(--profile "$profile")
+done
+
+compose() {
+    docker compose "${COMPOSE_ARGS[@]}" "$@"
+}
 
 tmp_map="$(mktemp)"
 tmp_compose="$(mktemp)"

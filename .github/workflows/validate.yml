@@ -24,7 +24,10 @@ jobs:
       - name: Validate media path usage
         run: |
           # Automation scripts must resolve MEDIA_DIR from env/.env, not hardcode $HOME/Media.
-          ! rg -n '\$HOME/Media' scripts/auto-heal.sh scripts/install-auto-heal.sh
+          # grep exits 1 only when there is no match; 0 = match (bad), 2 = error (bad).
+          rc=0
+          grep -nE '\$HOME/Media' scripts/auto-heal.sh scripts/install-auto-heal.sh || rc=$?
+          [ "$rc" -eq 1 ]
 
       - name: Validate compose config
         run: |

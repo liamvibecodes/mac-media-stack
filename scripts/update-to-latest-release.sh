@@ -65,7 +65,7 @@ origin_url="$(git remote get-url origin 2>/dev/null || true)"
 [[ -n "$origin_url" ]] || fail "origin remote not configured"
 
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-    fail "Tracked local changes detected. Commit/stash first, or rerun with --force."
+    fail "Tracked local changes detected. Commit or stash them first (--force does not override this check)."
 fi
 
 current_branch="$(git symbolic-ref --quiet --short HEAD || true)"

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Media Stack Auto-Configurator
-# Run this ONCE after "docker compose up -d" to configure all services.
-# Replaces manual Steps 8-10 from SETUP.md.
+# Run this ONCE after "docker compose up -d" to configure all services
+# (the "Connect the services" step in SETUP.md).
 # Usage: bash scripts/configure.sh [--non-interactive] [--help]
 
 set -euo pipefail
@@ -61,10 +61,6 @@ CREDS_FILE="$MEDIA_DIR/state/first-run-credentials.txt"
 # Helper functions
 # ============================================================
 
-log() { ui_ok "$1"; }
-warn() { ui_info "$1"; }
-fail() { ui_fail "$1"; }
-
 save_credentials() {
     mkdir -p "$(dirname "$CREDS_FILE")"
     cat > "$CREDS_FILE" <<EOF
@@ -78,40 +74,87 @@ EOF
     chmod 600 "$CREDS_FILE"
 }
 
-api_post_form() {
-    local label="$1"
-    local url="$2"
-    local cookie="$3"
-    shift 3
-
-    if curl -fsS -b "$cookie" "$url" "$@" >/dev/null; then
-        log "$label"
-        return 0
-    fi
-
-    fail "$label"
-    return 1
-}
-
 get_api_key() {
     local service="$1"
     local config_path="$CONFIG_DIR/$service/config.xml"
     local max_attempts=30
     local attempt=0
+    local key
 
     while [[ $attempt -lt $max_attempts ]]; do
         if [[ -f "$config_path" ]]; then
-            local key=$(grep -o '<ApiKey>[^<]*</ApiKey>' "$config_path" 2>/dev/null | sed 's/<[^>]*>//g')
+            key=$(grep -o '<ApiKey>[^<]*</ApiKey>' "$config_path" 2>/dev/null | sed 's/<[^>]*>//g')
             if [[ -n "$key" ]]; then
                 echo "$key"
                 return 0
             fi
         fi
         sleep 2
-        ((attempt++))
+        attempt=$((attempt + 1))
     done
-    fail "Could not read API key for $service"
+    ui_fail "Could not read API key for $service" >&2
     return 1
+}
+
+# GET an *arr/Prowlarr API endpoint.
+arr_get() {
+    curl -fsS "$1" -H "X-Api-Key: $2" 2>/dev/null
+}
+
+# First numeric "id" / first "name" string in the JSON read from stdin.
+first_json_id() { grep -o '"id":[0-9]*' | head -1 | cut -d: -f2; }
+first_json_name() { grep -m1 -o '"name": *"[^"]*"' | cut -d'"' -f4; }
+
+# Cardigann-based indexers use a different format
+add_cardigann_indexer() {
+    local name="$1"
+    local definition_name="$2"
+    local base_url="$3"
+    local tags="$4"
+
+    api_post_json "Indexer added: $name" \
+        "$PROWLARR_URL/api/v1/indexer" \
+        "$PROWLARR_KEY" \
+        "{
+            \"name\": \"$name\",
+            \"implementation\": \"Cardigann\",
+            \"configContract\": \"CardigannSettings\",
+            \"protocol\": \"torrent\",
+            \"enable\": true,
+            \"appProfileId\": 1,
+            \"priority\": 25,
+            \"fields\": [
+                {\"name\": \"definitionFile\", \"value\": \"$definition_name\"},
+                {\"name\": \"baseUrl\", \"value\": \"$base_url\"}
+            ],
+            \"tags\": [$tags]
+        }"
+}
+
+# Registers an *arr app in Prowlarr so the indexers sync to it.
+connect_prowlarr_app() {
+    local name="$1"
+    local host="$2"
+    local port="$3"
+    local api_key="$4"
+    local categories="$5"
+
+    api_post_json "Prowlarr connected to $name" \
+        "$PROWLARR_URL/api/v1/applications" \
+        "$PROWLARR_KEY" \
+        "{
+            \"name\": \"$name\",
+            \"implementation\": \"$name\",
+            \"configContract\": \"${name}Settings\",
+            \"syncLevel\": \"fullSync\",
+            \"fields\": [
+                {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr:$PROWLARR_PORT\"},
+                {\"name\": \"baseUrl\", \"value\": \"http://$host:$port\"},
+                {\"name\": \"apiKey\", \"value\": \"$api_key\"},
+                {\"name\": \"syncCategories\", \"value\": [$categories]}
+            ],
+            \"tags\": []
+        }"
 }
 
 # ============================================================
@@ -145,13 +188,13 @@ echo -e "${CYAN}[2/6] Reading API keys...${NC}"
 echo ""
 
 RADARR_KEY=$(get_api_key "radarr")
-log "Radarr API key: ${RADARR_KEY:0:8}..."
+ui_ok "Radarr API key: ${RADARR_KEY:0:8}..."
 
 SONARR_KEY=$(get_api_key "sonarr")
-log "Sonarr API key: ${SONARR_KEY:0:8}..."
+ui_ok "Sonarr API key: ${SONARR_KEY:0:8}..."
 
 PROWLARR_KEY=$(get_api_key "prowlarr")
-log "Prowlarr API key: ${PROWLARR_KEY:0:8}..."
+ui_ok "Prowlarr API key: ${PROWLARR_KEY:0:8}..."
 
 echo ""
 
@@ -161,9 +204,9 @@ echo ""
 
 echo -e "${CYAN}[3/6] Configuring rTorrent...${NC}"
 echo ""
-log "rTorrent needs no setup (labels and paths come from Radarr/Sonarr)"
+ui_ok "rTorrent needs no setup (labels and paths come from Radarr/Sonarr)"
 
-save_credentials || warn "Could not write $CREDS_FILE (API keys are under Settings > General in each app). Continuing."
+save_credentials || ui_info "Could not write $CREDS_FILE (API keys are under Settings > General in each app). Continuing."
 
 echo ""
 
@@ -190,9 +233,9 @@ echo ""
 FLARE_TAG_ID=$(curl -fsS "$PROWLARR_URL/api/v1/tag" \
     -H "X-Api-Key: $PROWLARR_KEY" \
     -H "Content-Type: application/json" \
-    -d '{"label": "flaresolverr"}' | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    -d '{"label": "flaresolverr"}' | first_json_id)
 FLARE_TAG_ID="${FLARE_TAG_ID:-1}"
-log "FlareSolverr tag created (ID: $FLARE_TAG_ID)"
+ui_ok "FlareSolverr tag created (ID: $FLARE_TAG_ID)"
 
 # --- Add FlareSolverr indexer proxy ---
 api_post_json "FlareSolverr proxy added" \
@@ -210,72 +253,15 @@ api_post_json "FlareSolverr proxy added" \
     }"
 
 # --- Add indexers ---
-
-# Cardigann-based indexers use a different format
-add_cardigann_indexer() {
-    local name="$1"
-    local definition_name="$2"
-    local base_url="$3"
-    local tags="$4"
-
-    api_post_json "Indexer added: $name" \
-        "$PROWLARR_URL/api/v1/indexer" \
-        "$PROWLARR_KEY" \
-        "{
-            \"name\": \"$name\",
-            \"implementation\": \"Cardigann\",
-            \"configContract\": \"CardigannSettings\",
-            \"protocol\": \"torrent\",
-            \"enable\": true,
-            \"appProfileId\": 1,
-            \"priority\": 25,
-            \"fields\": [
-                {\"name\": \"definitionFile\", \"value\": \"$definition_name\"},
-                {\"name\": \"baseUrl\", \"value\": \"$base_url\"}
-            ],
-            \"tags\": [$tags]
-        }"
-}
-
 add_cardigann_indexer "YTS" "yts" "https://yts.gg" ""
 add_cardigann_indexer "1337x" "1337x" "https://1337x.to" "$FLARE_TAG_ID"
 add_cardigann_indexer "EZTV" "eztv" "https://eztvx.to" ""
 
-# --- Connect Radarr as app ---
-api_post_json "Prowlarr connected to Radarr" \
-    "$PROWLARR_URL/api/v1/applications" \
-    "$PROWLARR_KEY" \
-    "{
-        \"name\": \"Radarr\",
-        \"implementation\": \"Radarr\",
-        \"configContract\": \"RadarrSettings\",
-        \"syncLevel\": \"fullSync\",
-        \"fields\": [
-            {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr:$PROWLARR_PORT\"},
-            {\"name\": \"baseUrl\", \"value\": \"http://radarr:$RADARR_PORT\"},
-            {\"name\": \"apiKey\", \"value\": \"$RADARR_KEY\"},
-            {\"name\": \"syncCategories\", \"value\": [2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070, 2080]}
-        ],
-        \"tags\": []
-    }"
-
-# --- Connect Sonarr as app ---
-api_post_json "Prowlarr connected to Sonarr" \
-    "$PROWLARR_URL/api/v1/applications" \
-    "$PROWLARR_KEY" \
-    "{
-        \"name\": \"Sonarr\",
-        \"implementation\": \"Sonarr\",
-        \"configContract\": \"SonarrSettings\",
-        \"syncLevel\": \"fullSync\",
-        \"fields\": [
-            {\"name\": \"prowlarrUrl\", \"value\": \"http://prowlarr:$PROWLARR_PORT\"},
-            {\"name\": \"baseUrl\", \"value\": \"http://sonarr:$SONARR_PORT\"},
-            {\"name\": \"apiKey\", \"value\": \"$SONARR_KEY\"},
-            {\"name\": \"syncCategories\", \"value\": [5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060, 5070, 5080]}
-        ],
-        \"tags\": []
-    }"
+# --- Connect Radarr and Sonarr as apps ---
+connect_prowlarr_app Radarr radarr "$RADARR_PORT" "$RADARR_KEY" \
+    "2000, 2010, 2020, 2030, 2040, 2045, 2050, 2060, 2070, 2080"
+connect_prowlarr_app Sonarr sonarr "$SONARR_PORT" "$SONARR_KEY" \
+    "5000, 5010, 5020, 5030, 5040, 5045, 5050, 5060, 5070, 5080"
 
 # --- Trigger Prowlarr to sync indexers to apps ---
 api_post_json "Indexer sync triggered" \
@@ -292,9 +278,9 @@ echo ""
 echo -e "${CYAN}[6/6] Configuring Seerr...${NC}"
 echo ""
 if [[ "$NON_INTERACTIVE" == true ]]; then
-    warn "Non-interactive mode: skipping Seerr Emby sign-in prompt."
-    warn "Manually open $SEERR_URL, select \"Use your Emby account\","
-    warn "and enter http://emby:8096 as the Emby URL."
+    ui_info "Non-interactive mode: skipping Seerr Emby sign-in prompt."
+    ui_info "Manually open $SEERR_URL, select \"Use your Emby account\","
+    ui_info "and enter http://emby:8096 as the Emby URL."
 else
     echo -e "  ${YELLOW}ACTION NEEDED:${NC} Open ${CYAN}$SEERR_URL${NC} in your browser"
     echo "  1. Click \"Use your Emby account\""
@@ -315,26 +301,20 @@ if [[ -f "$SEERR_SETTINGS" ]]; then
 fi
 
 if [[ -z "$SEERR_KEY" ]]; then
-    warn "Could not get Seerr API key. You may need to configure Radarr/Sonarr in Seerr manually."
-    warn "Go to Seerr Settings > Services and add Radarr (${RADARR_URL#http://}) and Sonarr (${SONARR_URL#http://})."
+    ui_info "Could not get Seerr API key. You may need to configure Radarr/Sonarr in Seerr manually."
+    ui_info "Go to Seerr Settings > Services and add Radarr (${RADARR_URL#http://}) and Sonarr (${SONARR_URL#http://})."
 else
-    # Get default quality profile and root folder IDs from Radarr
-    RADARR_PROFILE_ID=$(curl -fsS "$RADARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    # Get default quality profile from Radarr
+    RADARR_PROFILE_ID=$(arr_get "$RADARR_URL/api/v3/qualityprofile" "$RADARR_KEY" | first_json_id)
     RADARR_PROFILE_ID="${RADARR_PROFILE_ID:-1}"
-    RADARR_PROFILE_NAME=$(curl -fsS "$RADARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -m1 -o '"name": *"[^"]*"' | cut -d'"' -f4 || true)
+    RADARR_PROFILE_NAME=$(arr_get "$RADARR_URL/api/v3/qualityprofile" "$RADARR_KEY" | first_json_name || true)
     RADARR_PROFILE_NAME="${RADARR_PROFILE_NAME:-Any}"
 
-    RADARR_ROOT_ID=$(curl -fsS "$RADARR_URL/api/v3/rootfolder" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-    RADARR_ROOT_ID="${RADARR_ROOT_ID:-1}"
-
-    # Get default quality profile and root folder IDs from Sonarr
-    SONARR_PROFILE_ID=$(curl -fsS "$SONARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
+    # Get default quality profile from Sonarr
+    SONARR_PROFILE_ID=$(arr_get "$SONARR_URL/api/v3/qualityprofile" "$SONARR_KEY" | first_json_id)
     SONARR_PROFILE_ID="${SONARR_PROFILE_ID:-1}"
-    SONARR_PROFILE_NAME=$(curl -fsS "$SONARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -m1 -o '"name": *"[^"]*"' | cut -d'"' -f4 || true)
+    SONARR_PROFILE_NAME=$(arr_get "$SONARR_URL/api/v3/qualityprofile" "$SONARR_KEY" | first_json_name || true)
     SONARR_PROFILE_NAME="${SONARR_PROFILE_NAME:-Any}"
-
-    SONARR_ROOT_ID=$(curl -fsS "$SONARR_URL/api/v3/rootfolder" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
-    SONARR_ROOT_ID="${SONARR_ROOT_ID:-1}"
 
     # Add Radarr to Seerr
     api_post_json "Seerr connected to Radarr" \

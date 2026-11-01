@@ -4,6 +4,7 @@
 # Interface
 #   RED GREEN YELLOW CYAN NC          colour codes
 #   ui_ok|ui_warn|ui_fail|ui_info|ui_skip MSG   one status line each (OK / WARN / FAIL / .. / SKIP)
+#   http_status_answers CODE          succeeds for an HTTP status that means the app is up (incl. 401/403)
 #   wait_for_service NAME URL [ATTEMPTS=45] [LEVEL=warn|fail]
 #       polls every 2s; returns 0 once the URL answers, 1 on timeout
 #       (reported as WARN "continuing anyway", or FAIL when LEVEL=fail)
@@ -27,13 +28,16 @@ ui_fail() { _ui_line "$RED" "FAIL" "$1"; }
 ui_info() { _ui_line "$YELLOW" ".." "$1"; }
 ui_skip() { _ui_line "$YELLOW" "SKIP" "$1"; }
 
+# One definition of "answers" (see GLOSSARY.md): an auth challenge counts.
+http_status_answers() { [[ "$1" =~ ^(200|301|302|307|308|401|403)$ ]]; }
+
 wait_for_service() {
     local name="$1" url="$2" max_attempts="${3:-45}" level="${4:-warn}"
     local attempt=0 status
 
     while [[ $attempt -lt $max_attempts ]]; do
         status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || true)
-        if [[ "$status" =~ ^(200|301|302|307|308|401|403)$ ]]; then
+        if http_status_answers "$status"; then
             ui_ok "$name is reachable"
             return 0
         fi

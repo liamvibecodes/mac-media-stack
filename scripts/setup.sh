@@ -67,8 +67,9 @@ echo ""
 
 # Detect current user and home directory
 CURRENT_USER=$(whoami)
-HOME_DIR=$(eval echo ~$CURRENT_USER)
-MEDIA_DIR="${MEDIA_DIR_OVERRIDE:-$HOME_DIR/Media}"
+
+# Media dir priority: --media-dir -> existing .env MEDIA_DIR -> ~/Media
+MEDIA_DIR="${MEDIA_DIR_OVERRIDE:-$(config_get_path MEDIA_DIR "$HOME/Media")}"
 MEDIA_DIR="${MEDIA_DIR/#\~/$HOME}"
 
 # Config dir priority: --config-dir -> existing .env CONFIG_DIR -> <media-dir>/config
@@ -97,11 +98,11 @@ if [[ -f "$SCRIPT_DIR/.env" ]]; then
     echo "  Edit it manually if you need to change values."
 else
     echo "Creating .env file..."
-    sed "s|^CONFIG_DIR=.*|CONFIG_DIR=$CONFIG_DIR|" "$SCRIPT_DIR/.env.example" \
-        | sed "s|/Users/YOURUSERNAME/Media|$MEDIA_DIR|g" \
-        | sed "s|PUID=501|PUID=$USER_PUID|g" \
-        | sed "s|PGID=20|PGID=$USER_PGID|g" \
-        > "$SCRIPT_DIR/.env"
+    sed -e "s|^CONFIG_DIR=.*|CONFIG_DIR=$CONFIG_DIR|" \
+        -e "s|/Users/YOURUSERNAME/Media|$MEDIA_DIR|g" \
+        -e "s|PUID=501|PUID=$USER_PUID|g" \
+        -e "s|PGID=20|PGID=$USER_PGID|g" \
+        "$SCRIPT_DIR/.env.example" > "$SCRIPT_DIR/.env"
     chmod 600 "$SCRIPT_DIR/.env"
     echo -e "  ${GREEN}Done${NC}"
     echo ""

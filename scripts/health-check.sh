@@ -26,26 +26,21 @@ http_status() {
     curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$1" 2>/dev/null
 }
 
-reachable() {
-    [[ "$(http_status "$1")" =~ ^(200|301|302|307|308)$ ]]
-}
-
 check_service() {
     local name="$1" url="$2" status
     status="$(http_status "$url")"
-    if [[ "$status" =~ ^(200|301|302|307|308)$ ]]; then
+    if http_status_answers "$status"; then
         pass "$name"
     else
         flunk "$name (got HTTP $status)"
     fi
 }
 
-RUNTIME=$(detect_installed_runtime)
-
 if docker info &>/dev/null; then
     RUNTIME=$(detect_running_runtime)
     pass "$RUNTIME"
 else
+    RUNTIME=$(detect_installed_runtime)
     flunk "$RUNTIME (not running)"
     echo ""
     echo "Start $RUNTIME and try again."
@@ -97,7 +92,7 @@ while IFS='|' read -r container label url probe; do
     [[ -n "$url" && "$probe" == "advisory" ]] || continue
     echo ""
     echo "$label:"
-    if reachable "$url"; then
+    if http_status_answers "$(http_status "$url")"; then
         pass "$label ($url)"
     else
         ui_skip "$label not reachable yet (may still be starting)"

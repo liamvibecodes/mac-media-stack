@@ -79,12 +79,17 @@ topology_url() {
     return 1
 }
 
+# http://host:PORT/path -> PORT
+_topology_url_port() {
+    local url="${1#*://}"
+    url="${url#*:}"
+    printf '%s\n' "${url%%/*}"
+}
+
 topology_port() {
     local url
     url="$(topology_url "$1")" || return 1
-    url="${url#*://}"
-    url="${url#*:}"
-    printf '%s\n' "${url%%/*}"
+    _topology_url_port "$url"
 }
 
 topology_ports() {
@@ -92,9 +97,7 @@ topology_ports() {
     {
         while IFS='|' read -r container label url probe; do
             [[ -n "$url" ]] || continue
-            url="${url#*://}"
-            url="${url#*:}"
-            printf '%s\n' "${url%%/*}"
+            _topology_url_port "$url"
         done < <(topology_entries)
         if stack_proxy_enabled; then echo 80; fi
     } | sort -un
