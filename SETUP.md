@@ -298,11 +298,7 @@ The setup is now complete.
 - It imports finished downloads into Emby.
 - It gets English subtitles.
 - It starts again after a Mac restart. OrbStack or Docker Desktop must start at login.
-- It updates the containers at 04:00 each day, if you turn on Watchtower:
-
-```bash
-docker compose --profile autoupdate up -d watchtower
-```
+- It updates itself at 04:00 each day, if you turn on auto-update. See [Update the stack](#update-the-stack).
 
 ### Start and stop the stack
 
@@ -318,6 +314,28 @@ To get the newest release, run:
 
 ```bash
 bash scripts/update-to-latest-release.sh
+docker compose up -d
+```
+
+To have the stack do this by itself every day at 04:00, turn on auto-update:
+
+```bash
+bash scripts/install-auto-update.sh
+```
+
+Auto-update moves the stack to the newest release. A release names the exact image versions it was tested with, so the apps only change when a new release is published. Keep these points in mind:
+
+- It skips its run if you edited a tracked file or made commits of your own in this folder. Your `.env` is safe.
+- When it does run, it resets the project files to the release. Your changes to files such as `docker-compose.yml` are lost.
+- Containers restart when their image changes, so a running download pauses for a moment.
+
+The log file is `~/Library/Logs/media-stack/auto-update.log`.
+
+To remove auto-update:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.media-stack.auto-update.plist
+rm ~/Library/LaunchAgents/com.media-stack.auto-update.plist
 ```
 
 ### About the torrent client

@@ -61,11 +61,10 @@ while IFS='|' read -r container label url probe; do
     fi
 done < <(topology_entries)
 
-watchtower_state=$(docker inspect -f '{{.State.Status}}' watchtower 2>/dev/null || true)
-if [[ "$watchtower_state" == "running" ]]; then
-    pass "watchtower (autoupdate profile enabled)"
+if launchctl list com.media-stack.auto-update &>/dev/null; then
+    pass "auto-update (daily at 04:00)"
 else
-    ui_skip "watchtower (optional; enable with --profile autoupdate)"
+    ui_skip "auto-update (optional; enable with bash scripts/install-auto-update.sh)"
 fi
 
 echo ""

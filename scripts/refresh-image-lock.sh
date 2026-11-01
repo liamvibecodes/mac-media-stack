@@ -17,8 +17,7 @@ done
 LOCK_FILE="$SCRIPT_DIR/IMAGE_LOCK.md"
 ENV_FILE="$SCRIPT_DIR/.env"
 
-PROFILES=(autoupdate)
-OPTIONAL_SERVICES=(watchtower caddy)
+OPTIONAL_SERVICES=(caddy)
 
 for cmd in docker awk sed mktemp; do
     if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -37,9 +36,6 @@ done
 COMPOSE_ARGS=()
 for file in "${COMPOSE_FILES[@]}"; do
     COMPOSE_ARGS+=(-f "$file")
-done
-for profile in "${PROFILES[@]}"; do
-    COMPOSE_ARGS+=(--profile "$profile")
 done
 
 compose() {
