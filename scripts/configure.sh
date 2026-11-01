@@ -163,7 +163,7 @@ echo -e "${CYAN}[3/6] Configuring rTorrent...${NC}"
 echo ""
 log "rTorrent needs no setup (labels and paths come from Radarr/Sonarr)"
 
-save_credentials
+save_credentials || warn "Could not write $CREDS_FILE (API keys are under Settings > General in each app). Continuing."
 
 echo ""
 
@@ -223,25 +223,23 @@ add_cardigann_indexer() {
         "$PROWLARR_KEY" \
         "{
             \"name\": \"$name\",
-            \"definitionName\": \"$definition_name\",
             \"implementation\": \"Cardigann\",
             \"configContract\": \"CardigannSettings\",
             \"protocol\": \"torrent\",
             \"enable\": true,
             \"appProfileId\": 1,
+            \"priority\": 25,
             \"fields\": [
-                {\"name\": \"baseUrl\", \"value\": \"$base_url\"},
-                {\"name\": \"sortRequestLimit\", \"value\": 100},
-                {\"name\": \"multiLanguages\", \"value\": []}
+                {\"name\": \"definitionFile\", \"value\": \"$definition_name\"},
+                {\"name\": \"baseUrl\", \"value\": \"$base_url\"}
             ],
             \"tags\": [$tags]
         }"
 }
 
-add_cardigann_indexer "YTS" "yts" "https://yts.mx" ""
+add_cardigann_indexer "YTS" "yts" "https://yts.gg" ""
 add_cardigann_indexer "1337x" "1337x" "https://1337x.to" "$FLARE_TAG_ID"
 add_cardigann_indexer "EZTV" "eztv" "https://eztvx.to" ""
-add_cardigann_indexer "TorrentGalaxy" "torrentgalaxy" "https://torrentgalaxy.to" ""
 
 # --- Connect Radarr as app ---
 api_post_json "Prowlarr connected to Radarr" \
@@ -283,7 +281,7 @@ api_post_json "Prowlarr connected to Sonarr" \
 api_post_json "Indexer sync triggered" \
     "$PROWLARR_URL/api/v1/command" \
     "$PROWLARR_KEY" \
-    '{"name": "SyncIndexers"}'
+    '{"name": "ApplicationIndexerSync"}'
 
 echo ""
 
@@ -309,7 +307,12 @@ else
 fi
 
 # Get Seerr API key from settings
-SEERR_KEY=$(curl -fsS "$SEERR_URL/api/v1/settings/main" 2>/dev/null | grep -o '"apiKey":"[^"]*"' | cut -d'"' -f4)
+# (settings/main needs a login, so read the key from Seerr's settings file like the other apps)
+SEERR_SETTINGS="$CONFIG_DIR/seerr/settings.json"
+SEERR_KEY=""
+if [[ -f "$SEERR_SETTINGS" ]]; then
+    SEERR_KEY=$(grep -m1 -o '"apiKey": *"[^"]*"' "$SEERR_SETTINGS" 2>/dev/null | cut -d'"' -f4 || true)
+fi
 
 if [[ -z "$SEERR_KEY" ]]; then
     warn "Could not get Seerr API key. You may need to configure Radarr/Sonarr in Seerr manually."
@@ -318,6 +321,8 @@ else
     # Get default quality profile and root folder IDs from Radarr
     RADARR_PROFILE_ID=$(curl -fsS "$RADARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     RADARR_PROFILE_ID="${RADARR_PROFILE_ID:-1}"
+    RADARR_PROFILE_NAME=$(curl -fsS "$RADARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -m1 -o '"name": *"[^"]*"' | cut -d'"' -f4 || true)
+    RADARR_PROFILE_NAME="${RADARR_PROFILE_NAME:-Any}"
 
     RADARR_ROOT_ID=$(curl -fsS "$RADARR_URL/api/v3/rootfolder" -H "X-Api-Key: $RADARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     RADARR_ROOT_ID="${RADARR_ROOT_ID:-1}"
@@ -325,6 +330,8 @@ else
     # Get default quality profile and root folder IDs from Sonarr
     SONARR_PROFILE_ID=$(curl -fsS "$SONARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     SONARR_PROFILE_ID="${SONARR_PROFILE_ID:-1}"
+    SONARR_PROFILE_NAME=$(curl -fsS "$SONARR_URL/api/v3/qualityprofile" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -m1 -o '"name": *"[^"]*"' | cut -d'"' -f4 || true)
+    SONARR_PROFILE_NAME="${SONARR_PROFILE_NAME:-Any}"
 
     SONARR_ROOT_ID=$(curl -fsS "$SONARR_URL/api/v3/rootfolder" -H "X-Api-Key: $SONARR_KEY" 2>/dev/null | grep -o '"id":[0-9]*' | head -1 | cut -d: -f2)
     SONARR_ROOT_ID="${SONARR_ROOT_ID:-1}"
@@ -333,38 +340,42 @@ else
     api_post_json "Seerr connected to Radarr" \
         "$SEERR_URL/api/v1/settings/radarr" \
         "$SEERR_KEY" \
-        "[{
+        "{
             \"name\": \"Radarr\",
             \"hostname\": \"radarr\",
             \"port\": $RADARR_PORT,
             \"apiKey\": \"$RADARR_KEY\",
             \"useSsl\": false,
             \"activeProfileId\": $RADARR_PROFILE_ID,
+            \"activeProfileName\": \"$RADARR_PROFILE_NAME\",
             \"activeDirectory\": \"/data/movies\",
+            \"minimumAvailability\": \"released\",
             \"is4k\": false,
             \"isDefault\": true,
             \"externalUrl\": \"$RADARR_URL\"
-        }]"
+        }"
 
     # Add Sonarr to Seerr
     api_post_json "Seerr connected to Sonarr" \
         "$SEERR_URL/api/v1/settings/sonarr" \
         "$SEERR_KEY" \
-        "[{
+        "{
             \"name\": \"Sonarr\",
             \"hostname\": \"sonarr\",
             \"port\": $SONARR_PORT,
             \"apiKey\": \"$SONARR_KEY\",
             \"useSsl\": false,
             \"activeProfileId\": $SONARR_PROFILE_ID,
+            \"activeProfileName\": \"$SONARR_PROFILE_NAME\",
             \"activeDirectory\": \"/data/tvshows\",
             \"activeAnimeProfileId\": $SONARR_PROFILE_ID,
+            \"activeAnimeProfileName\": \"$SONARR_PROFILE_NAME\",
             \"activeAnimeDirectory\": \"/data/tvshows\",
             \"is4k\": false,
             \"isDefault\": true,
             \"enableSeasonFolders\": true,
             \"externalUrl\": \"$SONARR_URL\"
-        }]"
+        }"
 fi
 
 echo ""

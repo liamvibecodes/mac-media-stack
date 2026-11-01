@@ -27,13 +27,13 @@ http_status() {
 }
 
 reachable() {
-    [[ "$(http_status "$1")" =~ ^(200|301|302)$ ]]
+    [[ "$(http_status "$1")" =~ ^(200|301|302|307|308)$ ]]
 }
 
 check_service() {
     local name="$1" url="$2" status
     status="$(http_status "$url")"
-    if [[ "$status" =~ ^(200|301|302)$ ]]; then
+    if [[ "$status" =~ ^(200|301|302|307|308)$ ]]; then
         pass "$name"
     else
         flunk "$name (got HTTP $status)"

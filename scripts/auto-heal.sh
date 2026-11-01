@@ -8,8 +8,8 @@ source "$SCRIPT_DIR/lib/topology.sh"
 # shellcheck source=scripts/lib/vpn.sh
 source "$SCRIPT_DIR/lib/vpn.sh"
 
-MEDIA_DIR="$(stack_media_dir)"
-LOG_DIR="$MEDIA_DIR/logs"
+# Local disk on purpose: the media share may be unmounted or read-only
+LOG_DIR="${AUTO_HEAL_LOG_DIR:-$HOME/Library/Logs/media-stack}"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/auto-heal.log"
 

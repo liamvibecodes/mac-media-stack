@@ -269,7 +269,7 @@ The auto-healer checks the stack every hour. It restarts the VPN or a container 
 bash scripts/install-auto-heal.sh
 ```
 
-The log file is `<MEDIA_DIR>/logs/auto-heal.log`.
+The log file is `~/Library/Logs/media-stack/auto-heal.log`.
 
 To remove the auto-healer:
 
@@ -325,11 +325,62 @@ bash scripts/update-to-latest-release.sh
 rTorrent is the torrent client. It runs behind the VPN. Flood is its web page.
 
 - **Download folders.** rTorrent downloads into `downloads/temp`. It then moves finished files to `downloads/complete/radarr` or `downloads/complete/tv-sonarr`. It seeds from there.
-- **Import.** Radarr and Sonarr import files with a hardlink. The file uses disk space one time only.
+- **Import.** Radarr and Sonarr import files with a hardlink. The file uses disk space one time only. Refer to [About hardlinks](#about-hardlinks).
 - **Seeding.** Radarr and Sonarr do not remove finished torrents. Remove them yourself in Flood when you are done.
 - **Seed limits.** Set the ratio and time limits for each indexer in Prowlarr.
 - **Port forwarding.** With ProtonVPN, the stack gives the forwarded port to rTorrent each time the VPN connects. If you restart only the `rtorrent` container, also restart `gluetun`.
 - **Port 8000.** rTorrent uses port 8000. Gluetun uses port 8010 for its control server.
+
+### About hardlinks
+
+A hardlink is a second name for one file. Both names point to the same data on the disk. The data uses disk space one time only.
+
+```
+downloads/complete/radarr/Movie.mkv   -->  data on the disk (20 GB)
+movies/Movie (2024)/Movie.mkv         -->  the same data
+```
+
+- rTorrent seeds the file from the name in `downloads`.
+- Emby reads the file from the name in `movies`.
+- If you delete one name, the other name stays.
+- The disk space becomes free only after you delete the last name.
+
+**How the stack makes hardlinks possible**
+
+A hardlink works only inside one file system. In a container, both paths must also be in one mount.
+
+- Radarr, Sonarr, and Bazarr mount `MEDIA_DIR` as `/data`. The folders `downloads`, `movies`, and `tvshows` are all inside this one mount. The `docker-compose.yml` file sets this mount.
+- The root folders in Radarr and Sonarr are `/data/movies` and `/data/tvshows`.
+- rTorrent mounts only the `downloads` folder as `/downloads`. It does not import files, so it does not need the full mount.
+- `scripts/configure.sh` adds a remote path mapping in Radarr and Sonarr. It maps `/downloads/` to `/data/downloads/`. With this mapping, the apps find the files that rTorrent reports.
+- Emby mounts `movies` and `tvshows` as separate folders. This is correct because Emby only reads the files.
+
+> **WARNING**
+> Do not give `downloads` and the library separate mounts. Separate mounts force Radarr and Sonarr to copy each file.
+
+**The setting in Radarr and Sonarr**
+
+Radarr and Sonarr have a setting named "Use Hardlinks instead of Copy". It is on by default. The stack does not change it.
+
+1. In Radarr or Sonarr, open Settings, then Media Management.
+2. Find "Use Hardlinks instead of Copy". If you cannot see it, select "Show Advanced".
+3. Make sure that the setting is on.
+
+If this setting is off, the apps copy each file. The apps also copy each file when `downloads` and the library are on different file systems. Radarr and Sonarr do not show an error in the web page when they copy.
+
+**Check that hardlinks work**
+
+1. Wait for Radarr to import a movie.
+2. Run this command. Replace `~/Media` with your `MEDIA_DIR`:
+
+```bash
+find ~/Media/downloads/complete ~/Media/movies -name "*.mkv" -exec ls -li {} +
+```
+
+3. Find the movie in the list. It shows two files.
+4. Compare the number in the first column of each file. This number is the inode. The inode is the record that holds the data of a file.
+5. If the two numbers are the same, the files are hardlinks. The number in the third column is 2 or more.
+6. If the two numbers are different, the apps copied the file. Do the steps in the table in [Troubleshooting](#7-troubleshooting).
 
 ### Friendly hostnames (optional)
 
@@ -455,7 +506,7 @@ Then find your problem in the table.
 | Emby does not show a new movie | The library did not scan yet | In Emby, open the library. Select "Scan Library". Make sure the folder paths are `/data/movies` and `/data/tvshows`. |
 | "Permission denied" | `PUID` or `PGID` is wrong | Run `id -u` and `id -g`. Put the values in `.env`. Run `docker compose up -d`. |
 | A hostname does not open | The name does not resolve | Run `bash scripts/doctor.sh`. Refer to the actions below. |
-| Files are copied and not linked | The media is on an SMB share | Use NFS. Refer to [Media on a NAS](#media-on-a-nas-optional). |
+| Files are copied and not linked | The media is on an SMB share, or "Use Hardlinks instead of Copy" is off | Use NFS. Refer to [Media on a NAS](#media-on-a-nas-optional). Make sure that the setting is on. Refer to [About hardlinks](#about-hardlinks). |
 
 **If a hostname does not open:**
 

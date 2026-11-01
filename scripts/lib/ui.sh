@@ -33,7 +33,7 @@ wait_for_service() {
 
     while [[ $attempt -lt $max_attempts ]]; do
         status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$url" 2>/dev/null || true)
-        if [[ "$status" =~ ^(200|301|302|401|403)$ ]]; then
+        if [[ "$status" =~ ^(200|301|302|307|308|401|403)$ ]]; then
             ui_ok "$name is reachable"
             return 0
         fi

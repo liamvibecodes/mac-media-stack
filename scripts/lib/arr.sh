@@ -43,7 +43,7 @@ api_post_json() {
         return 0
     fi
 
-    if grep -qiE "already exists|must be unique|duplicate" <<<"$body"; then
+    if grep -qiE "already exists|already configured|must be unique|should be unique|duplicate" <<<"$body"; then
         ui_info "$label (already configured)"
         return 0
     fi
@@ -84,6 +84,7 @@ _arr_download_client_payload() {
     cat <<JSON
 {"enable": true, "protocol": "torrent", "name": "rTorrent",
  "implementation": "RTorrent", "configContract": "RTorrentSettings",
+ "priority": 1,
  "fields": [
   {"name": "host", "value": "gluetun"},
   {"name": "port", "value": 8000},

@@ -15,7 +15,7 @@ Tested lock snapshot:
 | radarr | `lscr.io/linuxserver/radarr@sha256:6d3e68474ea146f995af98d3fb2cb1a14e2e4457ddaf035aa5426889e2f9249c` |
 | sonarr | `lscr.io/linuxserver/sonarr@sha256:37be832b78548e3f55f69c45b50e3b14d18df1b6def2a4994258217e67efb1a1` |
 | prowlarr | `lscr.io/linuxserver/prowlarr@sha256:e74a1e093dcc223d671d4b7061e2b4946f1989a4d3059654ff4e623b731c9134` |
-| seerr | `ghcr.io/seerr-team/seerr@sha256:1b5fc1ea825631d9d165364472663b817a4c58ef6aa1013f58d82c1570d7c866` |
+| seerr | `ghcr.io/seerr-team/seerr@sha256:d8fab675b55ad293ded98fd71efcfd46054cbad9746534ae1cc4794a88c0b3be` |
 | emby | `lscr.io/linuxserver/emby@sha256:4c3d0b88b7d8b79ee656ff016fd049b51585753ddbb9db984d6c230c39b4df74` |
 | rtorrent | `crazymax/rtorrent-rutorrent@sha256:a6577938d9b2d1e9038a9989c395990738c984ff6d7a2037a082a06bb4ab8a2d` |
 | flood | `jesec/flood@sha256:241f172786fe958a09a55615cb4cd1b15d0aec9751f2d87dd8d7a67bcd24f0fa` |
